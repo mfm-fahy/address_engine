@@ -1,0 +1,8 @@
+services:
+  backend:
+    build: null
+    image: mfmfahy/addressing-backend:latest
+
+  frontend:
+    build: null
+    image: mfmfahy/addressing-frontend:latest
