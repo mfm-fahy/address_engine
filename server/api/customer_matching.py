@@ -3,6 +3,8 @@ from datetime import datetime
 from config.database import get_db
 from config.postgres import get_pool
 
+PAID_STATUSES = {"paid", "shipped", "delivered", "completed", "confirmed", "processing"}
+
 
 async def build_customer_profiles():
     db = get_db()
@@ -55,7 +57,8 @@ async def build_customer_profiles():
                         "items": data.get("items", []),
                         "date": data.get("createdAt", "")
                     })
-                    total_spent += float(data.get("totalAmount", 0) or 0)
+                    if data.get("status", "").lower() in PAID_STATUSES:
+                        total_spent += float(data.get("totalAmount", 0) or 0)
 
                 elif source == "instaxbot":
                     cust = data.get("customer", {})
@@ -71,7 +74,8 @@ async def build_customer_profiles():
                         "items": data.get("items", []),
                         "date": data.get("createdAt", "")
                     })
-                    total_spent += float(data.get("totalAmount", 0) or 0)
+                    if data.get("status", "").lower() in PAID_STATUSES:
+                        total_spent += float(data.get("totalAmount", 0) or 0)
 
                 elif source == "f3":
                     cust = data.get("customerDetails", {})
@@ -87,7 +91,8 @@ async def build_customer_profiles():
                         "items": data.get("items", []),
                         "date": data.get("createdAt", data.get("orderDate", ""))
                     })
-                    total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
+                    if data.get("status", "").lower() in PAID_STATUSES:
+                        total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
 
                 elif source == "bill":
                     all_bills.append({
@@ -98,7 +103,8 @@ async def build_customer_profiles():
                         "items": data.get("order", []),
                         "date": data.get("date", "")
                     })
-                    total_spent += float(data.get("amount", 0) or 0)
+                    if data.get("status", "").lower() in PAID_STATUSES:
+                        total_spent += float(data.get("amount", 0) or 0)
 
             customer_id = f"CUST{phone}"
 
