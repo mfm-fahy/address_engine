@@ -96,7 +96,7 @@ export default function CustomerDetail() {
 
       <div className="detail-grid">
         <div className="detail-card">
-          <h3><DollarSign size={14} /> Summary</h3>
+          <h3><IndianRupee size={14} /> Summary</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Total Spent</span>
