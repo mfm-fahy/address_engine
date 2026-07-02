@@ -4,7 +4,7 @@ import { readdir } from 'node:fs/promises';
 const APIS = [
   {
     name: 'orders',
-    url: 'https://bot.gowhats.in/api/v1/orders',
+    url: 'https://bot.gowhats.in/api/admin/orders',
     token: process.env.GOWHATS_API_KEY || ''
   },
   {

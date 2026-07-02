@@ -55,7 +55,8 @@ async def build_customer_profiles():
                         "amount": data.get("totalAmount", 0),
                         "status": data.get("status", ""),
                         "items": data.get("items", []),
-                        "date": data.get("createdAt", "")
+                        "date": data.get("createdAt", ""),
+                        "raw": data
                     })
                     if data.get("status", "").lower() in PAID_STATUSES:
                         total_spent += float(data.get("totalAmount", 0) or 0)
@@ -72,7 +73,8 @@ async def build_customer_profiles():
                         "amount": data.get("totalAmount", 0),
                         "status": data.get("status", ""),
                         "items": data.get("items", []),
-                        "date": data.get("createdAt", "")
+                        "date": data.get("createdAt", ""),
+                        "raw": data
                     })
                     if data.get("status", "").lower() in PAID_STATUSES:
                         total_spent += float(data.get("totalAmount", 0) or 0)
@@ -89,7 +91,8 @@ async def build_customer_profiles():
                         "amount": data.get("totalAmount", data.get("total", data.get("amount", 0))),
                         "status": data.get("status", ""),
                         "items": data.get("items", []),
-                        "date": data.get("createdAt", data.get("orderDate", ""))
+                        "date": data.get("createdAt", data.get("orderDate", "")),
+                        "raw": data
                     })
                     if data.get("status", "").lower() in PAID_STATUSES:
                         total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
@@ -101,7 +104,8 @@ async def build_customer_profiles():
                         "amount": data.get("amount", 0),
                         "status": data.get("status", ""),
                         "items": data.get("order", []),
-                        "date": data.get("date", "")
+                        "date": data.get("date", ""),
+                        "raw": data
                     })
                     if data.get("status", "").lower() in PAID_STATUSES:
                         total_spent += float(data.get("amount", 0) or 0)

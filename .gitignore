@@ -4,3 +4,8 @@ node_modules/
 __pycache__/
 *.pyc
 .DS_Store
+addressengine
+addressengine.pem
+addressengine1.ppk
+*.ppk
+*.pem

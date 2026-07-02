@@ -1,5 +1,5 @@
-const API_URL = '  https://f3engine.com/api/external/orders';
-const API_KEY = process.env.F3_API_KEY || '';
+const API_URL = 'https://bot.gowhats.in/api/admin/orders';
+const API_KEY = process.env.GOWHATS_API_KEY|| '';
 
 async function fetchData() {
   try {
