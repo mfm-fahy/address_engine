@@ -28,7 +28,6 @@ services:
     restart: unless-stopped
 
   backend:
-    build: null
     image: mfmfahy/addressing-backend:latest
     ports:
       - "8000:8000"
@@ -40,7 +39,6 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: null
     image: mfmfahy/addressing-frontend:latest
     ports:
       - "80:80"
