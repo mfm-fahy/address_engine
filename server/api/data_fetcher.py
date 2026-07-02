@@ -46,13 +46,11 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
 
         orders = []
         if isinstance(data, dict):
-            if "data" in data and isinstance(data["data"], dict):
-                orders = data["data"].get("orders", [])
-            elif "orders" in data:
+            if "orders" in data and isinstance(data["orders"], list):
                 orders = data["orders"]
+            elif "data" in data and isinstance(data["data"], dict):
+                orders = data["data"].get("orders", [])
             elif "data" in data and isinstance(data["data"], list):
-                orders = data["data"]
-            elif "success" in data and "data" in data and isinstance(data["data"], list):
                 orders = data["data"]
 
         if not orders:
@@ -71,7 +69,12 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
             if not pagination.get("hasNextPage"):
                 break
         else:
-            if len(orders) < 100:
+            total = data.get("total") if isinstance(data, dict) else None
+            fetched_so_far = (page - 1) * 100 + len(orders)
+            if total is not None:
+                if fetched_so_far >= total:
+                    break
+            elif len(orders) < 100:
                 break
 
         page += 1

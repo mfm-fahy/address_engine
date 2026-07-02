@@ -9,7 +9,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://customer360:customer360@l
 
 API_KEYS = {
     "gowhats": {
-        "url": "https://bot.gowhats.in/api/v1/orders",
+        "url": "https://bot.gowhats.in/api/admin/orders",
         "key": os.getenv("GOWHATS_API_KEY", "")
     },
     "instaxbot": {
