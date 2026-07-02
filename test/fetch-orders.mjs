@@ -1,5 +1,5 @@
 const API_URL = 'https://app.instaxbot.com/fullfillment';
-const API_KEY = 'gw_c5099da220f2e23363b1fdb655bfe9f00320ab1aa512824c7c8d5b92cfc4d0cb';
+const API_KEY = process.env.INSTAXBOT_API_KEY || '';
 
 async function fetchOrders() {
   try {

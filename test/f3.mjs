@@ -1,5 +1,5 @@
 const API_URL = '  https://f3engine.com/api/external/orders';
-const API_KEY = 'f3_ff5e10id2rnmpjfwp4xt1';
+const API_KEY = process.env.F3_API_KEY || '';
 
 async function fetchData() {
   try {
