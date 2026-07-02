@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShoppingCart, MessageCircle, Receipt, DollarSign, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, MessageCircle, Receipt, IndianRupee, AlertTriangle } from 'lucide-react'
 import { fetchCustomer } from '../api'
 
 export default function CustomerDetail() {

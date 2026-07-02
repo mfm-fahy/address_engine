@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart, MessageCircle, AlertTriangle, TrendingUp,
-  RefreshCw, Search, Users, IndianRupee, Filter, X,
-  ArrowUpDown, ChevronDown, Instagram, Globe, CreditCard,
+  RefreshCw, Search, Users, IndianRupee, X,
+  Instagram, Globe, CreditCard,
   Package, PieChart, SlidersHorizontal, LayoutGrid, List
 } from 'lucide-react'
 import { fetchCustomers, fetchAlerts, triggerRefreshAll } from '../api'
@@ -148,7 +148,6 @@ export default function Dashboard() {
 
   if (loading) return (
     <div>
-      <div className="header"><h1>Customer360</h1></div>
       <div className="stats-grid">
         {[1,2,3,4].map(i => <div key={i} className="stat-card"><div className="skeleton-value" /></div>)}
       </div>
@@ -160,9 +159,8 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="header">
-        <div className="header-left">
-          <h1>Customer360</h1>
+      <div className="page-toolbar">
+        <div className="page-toolbar-left">
           <span className="header-subtitle">{customers.length} customers tracked</span>
         </div>
         <div className="header-actions">
