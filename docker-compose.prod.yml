@@ -28,6 +28,9 @@ services:
     restart: unless-stopped
 
   backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     image: mfmfahy/addressing-backend:latest
     ports:
       - "8000:8000"
@@ -39,9 +42,15 @@ services:
     restart: unless-stopped
 
   frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
     image: mfmfahy/addressing-frontend:latest
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
     restart: unless-stopped
