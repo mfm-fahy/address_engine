@@ -21,7 +21,7 @@ API_KEYS = {
         "key": os.getenv("F3_API_KEY", "")
     },
     "bill": {
-        "url": "https://billzzy.com/api/partner/orders",
+        "url": "https://billzzy.com/api/admin/all-data",
         "key": os.getenv("BILLZZY_API_KEY", ""),
         "timeout": 30,
         "per_request_timeout": 30
