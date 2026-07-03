@@ -23,8 +23,8 @@ API_KEYS = {
     "bill": {
         "url": "https://billzzy.com/api/admin/all-data",
         "key": os.getenv("BILLZZY_API_KEY", ""),
-        "timeout": 30,
-        "per_request_timeout": 30
+        "timeout": 120,
+        "per_request_timeout": 120
     }
 }
 
