@@ -18,29 +18,59 @@ def normalize_phone(phone: str) -> str:
     phone = phone[-10:] if len(phone) >= 10 else phone
     return phone
 
-async def fetch_orders(source_name: str, url: str, api_key: str, page: int = 1, limit: int = 100, per_request_timeout: int = 60):
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    params = {"page": page, "limit": limit}
-
-    async with httpx.AsyncClient(timeout=per_request_timeout) as client:
+async def fetch_url(url: str, api_key: str, params: dict = {}, timeout: int = 60):
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=timeout) as client:
         try:
-            if source_name in ("f3", "bill"):
-                params = {}
             resp = await client.get(url, headers=headers, params=params)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            print(f"Error fetching {source_name} page {page}: {e}")
+            print(f"Error fetching {url}: {e}")
             return None
 
 async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_request_timeout: int = 60):
     all_orders = []
+
+    # Billzzy: organisations with nested customers + transactions, paginated by offset
+    if source_name == "bill":
+        limit = 20
+        offset = 0
+        while True:
+            data = await fetch_url(url, api_key, params={"limit": limit, "offset": offset}, timeout=per_request_timeout)
+            if not data:
+                break
+            orgs = data.get("organisations", [])
+            for org in orgs:
+                customers = org.get("customers", [])
+                transactions = org.get("transactions", [])
+                for cust in customers:
+                    all_orders.append({
+                        "_bill_customer": cust,
+                        "_bill_transactions": transactions,
+                        "_org_name": org.get("name", "")
+                    })
+            total = data.get("count", 0)
+            offset += limit
+            if offset >= total:
+                break
+        return all_orders
+
+    # F3: single page, no pagination
+    if source_name == "f3":
+        data = await fetch_url(url, api_key, timeout=per_request_timeout)
+        if not data:
+            return []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("data", data.get("orders", []))
+        return []
+
+    # GoWhats / Instaxbot: paginated with page + limit
     page = 1
     while True:
-        data = await fetch_orders(source_name, url, api_key, page=page, limit=100, per_request_timeout=per_request_timeout)
+        data = await fetch_url(url, api_key, params={"page": page, "limit": 100}, timeout=per_request_timeout)
         if not data:
             break
 
@@ -58,24 +88,13 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
 
         all_orders.extend(orders)
 
-        pagination = None
-        if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
-            pagination = data["data"].get("pagination")
-
-        if source_name in ("f3", "bill"):
+        total = data.get("total") if isinstance(data, dict) else None
+        fetched_so_far = (page - 1) * 100 + len(orders)
+        if total is not None:
+            if fetched_so_far >= total:
+                break
+        elif len(orders) < 100:
             break
-
-        if pagination:
-            if not pagination.get("hasNextPage"):
-                break
-        else:
-            total = data.get("total") if isinstance(data, dict) else None
-            fetched_so_far = (page - 1) * 100 + len(orders)
-            if total is not None:
-                if fetched_so_far >= total:
-                    break
-            elif len(orders) < 100:
-                break
 
         page += 1
 
@@ -88,8 +107,8 @@ async def fetch_and_store_all():
 
     for source_name, config in API_KEYS.items():
         print(f"Fetching {source_name}...")
-        source_timeout = config.get("timeout", 30)
-        per_request_timeout = config.get("per_request_timeout", 30)
+        source_timeout = config.get("timeout", 60)
+        per_request_timeout = config.get("per_request_timeout", 60)
         try:
             orders = await asyncio.wait_for(
                 fetch_all_paginated(source_name, config["url"], config["key"], per_request_timeout=per_request_timeout),
@@ -103,6 +122,7 @@ async def fetch_and_store_all():
             print(f"  -> ERROR: {e}")
             all_results[source_name] = -1
             continue
+
         if orders:
             from pymongo import UpdateOne
             batch = []
@@ -144,7 +164,8 @@ def extract_phone(source: str, order: dict) -> str:
         cust = order.get("customerDetails", {})
         return cust.get("phone", order.get("customerPhone", ""))
     elif source == "bill":
-        return order.get("customer", {}).get("mobile", "")
+        cust = order.get("_bill_customer", {})
+        return cust.get("phone", "")
     return ""
 
 def extract_name(source: str, order: dict) -> str:
@@ -156,5 +177,6 @@ def extract_name(source: str, order: dict) -> str:
         cust = order.get("customerDetails", {})
         return cust.get("name", order.get("customerName", ""))
     elif source == "bill":
-        return order.get("customer", {}).get("name", "")
+        cust = order.get("_bill_customer", {})
+        return cust.get("name", "")
     return ""

@@ -98,17 +98,21 @@ async def build_customer_profiles():
                         total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
 
                 elif source == "bill":
-                    all_bills.append({
-                        "transaction_id": data.get("transactionId"),
-                        "bill_no": data.get("billNo"),
-                        "amount": data.get("amount", 0),
-                        "status": data.get("status", ""),
-                        "items": data.get("order", []),
-                        "date": data.get("date", ""),
-                        "raw": data
-                    })
-                    if data.get("status", "").lower() in PAID_STATUSES:
-                        total_spent += float(data.get("amount", 0) or 0)
+                    cust = data.get("_bill_customer", {})
+                    if cust.get("email"):
+                        email = cust["email"]
+                    for txn in data.get("_bill_transactions", []):
+                        all_bills.append({
+                            "transaction_id": txn.get("id"),
+                            "bill_no": txn.get("billNo"),
+                            "amount": float(txn.get("totalPrice", 0) or 0),
+                            "status": txn.get("status", ""),
+                            "payment_status": txn.get("paymentStatus", ""),
+                            "items": [],
+                            "date": txn.get("date", "")
+                        })
+                        if txn.get("status", "").lower() in PAID_STATUSES:
+                            total_spent += float(txn.get("totalPrice", 0) or 0)
 
             customer_id = f"CUST{phone}"
 
