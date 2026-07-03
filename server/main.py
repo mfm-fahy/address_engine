@@ -8,6 +8,8 @@ from config.postgres import get_pool
 from api.data_fetcher import fetch_and_store_all
 from api.comment_fetcher import analyze_and_store_comments, get_tenant_ids
 from api.customer_matching import build_customer_profiles, get_all_customers, get_customer_by_id, get_alerts
+from c360_mcp.routes import router as mcp_router
+from c360_mcp.handler import get_pool as mcp_get_pool, close_pool as mcp_close_pool
 
 
 FETCH_INTERVAL = 5
@@ -46,6 +48,10 @@ async def background_fetch_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
+    try:
+        await mcp_get_pool()
+    except Exception:
+        print("[mcp] PostgreSQL not available, MCP pool will be lazy")
     task = asyncio.create_task(background_fetch_loop())
     yield
     task.cancel()
@@ -53,9 +59,11 @@ async def lifespan(app: FastAPI):
         await task
     except asyncio.CancelledError:
         pass
+    await mcp_close_pool()
     await close_db()
 
 app = FastAPI(title="Customer360 API", lifespan=lifespan)
+app.include_router(mcp_router)
 
 app.add_middleware(
     CORSMiddleware,

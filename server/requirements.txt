@@ -7,3 +7,5 @@ httpx
 textblob
 vaderSentiment
 asyncpg
+mcp
+sse-starlette
