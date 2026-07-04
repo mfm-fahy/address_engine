@@ -51,8 +51,11 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
             org_id = org.get("id")
             org_name = org.get("name", "")
             org_phone = normalize_phone(org.get("phone", ""))
+
+            cust_id_to_phone = {}
             for cust in org.get("customers", []):
                 phone = normalize_phone(cust.get("phone", ""))
+                cust_id_to_phone[cust.get("id")] = phone
                 all_customers.append({
                     "source": "bill",
                     "order_id": f"bill_cust_{org_id}_{cust.get('id', '')}",
@@ -68,9 +71,14 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                         "_bill_customer": cust
                     }
                 })
+
             for tx in org.get("transactions", []):
                 tx_customer = tx.get("customer", {})
-                tx_phone = normalize_phone(tx_customer.get("phone", "") or tx_customer.get("mobile", "")) or org_phone
+                tx_phone = (
+                    normalize_phone(tx_customer.get("phone", "") or tx_customer.get("mobile", ""))
+                    or cust_id_to_phone.get(tx.get("customerId") or tx.get("customer_id"))
+                    or org_phone
+                )
                 all_transactions.append({
                     "order_id": f"bill_tx_{org_id}_{tx.get('id', '')}",
                     "phone": tx_phone,
@@ -86,6 +94,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     "payment_status": tx.get("paymentStatus", ""),
                     "date": tx.get("date", ""),
                     "notes": tx.get("notes", ""),
+                    "customer_id": tx_customer.get("id") or tx.get("customerId") or tx.get("customer_id", ""),
                     "address": tx_customer.get("address", "") if tx_customer else "",
                     "raw_transaction": tx
                 })
