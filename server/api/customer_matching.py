@@ -22,6 +22,7 @@ async def build_customer_profiles():
             bill_cust_id_to_phone[str(cid)] = doc.get("phone", "")
 
     bill_txs_by_phone = {}
+    bill_txs_by_id = {}
     async for tx in db["bill_transactions"].find({}):
         phone = tx.get("phone", "")
         if not phone:
@@ -30,6 +31,13 @@ async def build_customer_profiles():
         if phone not in bill_txs_by_phone:
             bill_txs_by_phone[phone] = []
         bill_txs_by_phone[phone].append(tx)
+
+        bid = tx.get("bill_id")
+        if bid is not None:
+            bid = str(bid)
+            if bid not in bill_txs_by_id:
+                bill_txs_by_id[bid] = []
+            bill_txs_by_id[bid].append(tx)
 
     pipeline = [
         {"$group": {
@@ -63,6 +71,7 @@ async def build_customer_profiles():
             total_spent = 0.0
             bill_total_from_api = 0.0
             metadata = {}
+            bill_customer_id = ""
 
             for rec in records:
                 data = rec["data"]
@@ -134,6 +143,7 @@ async def build_customer_profiles():
                                         cust.get("district", ""), cust.get("state", ""),
                                         cust.get("pincode", "")] if p
                         )
+                        metadata["address"] = address
                         bill_customer_id = cust.get("id", "")
                     for b in (cust.get("bills") or cust.get("transactions") or []):
                         all_bills.append({
@@ -149,6 +159,8 @@ async def build_customer_profiles():
 
             if not all_bills:
                 tx_docs = bill_txs_by_phone.get(phone, [])
+                if not tx_docs and bill_customer_id:
+                    tx_docs = bill_txs_by_id.get(str(bill_customer_id), [])
                 for tx in tx_docs:
                     all_bills.append({
                         "transaction_id": tx.get("bill_id"),

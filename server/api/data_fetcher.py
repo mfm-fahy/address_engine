@@ -78,6 +78,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                 tx_customer_id = str(tx.get("customerId") or tx.get("customer_id") or "")
                 tx_phone = (
                     normalize_phone(tx_customer.get("phone", "") or tx_customer.get("mobile", ""))
+                    or cust_id_to_phone.get(str(tx.get("id")))
                     or cust_id_to_phone.get(tx_customer_id)
                     or org_phone
                 )
@@ -97,7 +98,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     "date": tx.get("date", ""),
                     "notes": tx.get("notes", ""),
                     "customer_id": tx_customer_id,
-                    "address": tx_customer.get("address", "") if tx_customer else "",
+                    "address": build_billzzy_address(tx_customer) if tx_customer else "",
                     "raw_transaction": tx
                 })
 
