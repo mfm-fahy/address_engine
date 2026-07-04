@@ -232,6 +232,18 @@ export default function CustomerDetail() {
           {customer.email ? ` &middot; ${customer.email}` : ''}
           {customer.username ? ` &middot; @${customer.username}` : ''}
         </div>
+        {customer.metadata?.flatNo && (
+          <div className="meta" style={{ fontSize: 13, marginTop: 4 }}>
+            <MapPin size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+            {[
+              customer.metadata.flatNo,
+              customer.metadata.street,
+              customer.metadata.district,
+              customer.metadata.state,
+              customer.metadata.pincode
+            ].filter(Boolean).join(', ')}
+          </div>
+        )}
         <div className="badges">
           {customer.sources?.includes('instaxbot') && <span className="badge badge-insta">Instagram</span>}
           {customer.sources?.includes('gowhats') && <span className="badge badge-whats">WhatsApp</span>}
@@ -294,7 +306,7 @@ export default function CustomerDetail() {
           )}
         </ExpandableSection>
 
-        <ExpandableSection title="Bills" count={customer.bills?.length || 0}>
+        <ExpandableSection title="Bills" count={customer.bills?.length || 0} defaultOpen={true}>
           {customer.bills?.length === 0 ? (
             <div className="detail-muted">No bills yet</div>
           ) : (
