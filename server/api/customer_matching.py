@@ -15,6 +15,13 @@ async def build_customer_profiles():
     raw_col = db["raw_orders"]
     pool = get_pool()
 
+    bill_txs_by_phone = {}
+    async for tx in db["bill_transactions"].find({}):
+        phone = tx.get("phone", "")
+        if phone not in bill_txs_by_phone:
+            bill_txs_by_phone[phone] = []
+        bill_txs_by_phone[phone].append(tx)
+
     pipeline = [
         {"$group": {
             "_id": "$phone",
@@ -105,18 +112,23 @@ async def build_customer_profiles():
                     cust = data.get("_bill_customer", {})
                     if cust.get("email"):
                         email = cust["email"]
-                    for txn in data.get("_bill_transactions", []):
-                        all_bills.append({
-                            "transaction_id": txn.get("id"),
-                            "bill_no": txn.get("billNo"),
-                            "amount": float(txn.get("totalPrice", 0) or 0),
-                            "status": txn.get("status", ""),
-                            "payment_status": txn.get("paymentStatus", ""),
-                            "items": [],
-                            "date": txn.get("date", "")
-                        })
-                        if txn.get("status", "").lower() in PAID_STATUSES:
-                            total_spent += float(txn.get("totalPrice", 0) or 0)
+                    if cust.get("name"):
+                        name = cust["name"]
+
+            tx_docs = bill_txs_by_phone.get(phone, [])
+            for tx in tx_docs:
+                all_bills.append({
+                    "transaction_id": tx.get("bill_id"),
+                    "bill_no": tx.get("bill_no"),
+                    "amount": tx.get("amount", 0),
+                    "status": tx.get("status", ""),
+                    "payment_status": tx.get("payment_status", ""),
+                    "items": [],
+                    "date": tx.get("date", ""),
+                    "org_name": tx.get("org_name", "")
+                })
+                if tx.get("status", "").lower() in PAID_STATUSES:
+                    total_spent += float(tx.get("amount", 0) or 0)
 
             customer_id = f"CUST{phone}"
 

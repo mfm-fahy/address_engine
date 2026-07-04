@@ -13,6 +13,7 @@ const SOURCES = [
   { key: 'instaxbot', label: 'Instagram', icon: Instagram, color: '#e1306c' },
   { key: 'gowhats', label: 'WhatsApp', icon: MessageCircle, color: '#25d366' },
   { key: 'f3', label: 'F3', icon: Globe, color: '#a855f7' },
+  { key: 'bill', label: 'Bill', icon: CreditCard, color: '#64748b' },
 ]
 
 export default function Dashboard() {
