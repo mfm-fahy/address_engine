@@ -42,9 +42,11 @@ async def init_schema():
                 comment_count INTEGER DEFAULT 0,
                 last_activity TIMESTAMPTZ,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
+                metadata JSONB DEFAULT '{}',
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+            ALTER TABLE customers ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
             CREATE TABLE IF NOT EXISTS comments (
                 id SERIAL PRIMARY KEY,

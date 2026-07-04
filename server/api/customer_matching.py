@@ -114,6 +114,10 @@ async def build_customer_profiles():
                         email = cust["email"]
                     if cust.get("name"):
                         name = cust["name"]
+                    if cust:
+                        metadata = {k: cust[k] for k in cust if k != "id"}
+                        address = cust.get("address", "")
+                        bill_customer_id = cust.get("id", "")
 
             tx_docs = bill_txs_by_phone.get(phone, [])
             for tx in tx_docs:
@@ -125,7 +129,8 @@ async def build_customer_profiles():
                     "payment_status": tx.get("payment_status", ""),
                     "items": [],
                     "date": tx.get("date", ""),
-                    "org_name": tx.get("org_name", "")
+                    "org_name": tx.get("org_name", ""),
+                    "address": tx.get("address", "")
                 })
                 if tx.get("status", "").lower() in PAID_STATUSES:
                     total_spent += float(tx.get("amount", 0) or 0)
@@ -144,8 +149,8 @@ async def build_customer_profiles():
                 INSERT INTO customers (
                     customer_id, phone, name, email, username,
                     total_orders, total_bills, total_spent,
-                    orders, bills, sources, last_activity, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13)
+                    orders, bills, sources, last_activity, updated_at, metadata
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb)
                 ON CONFLICT (customer_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     email = EXCLUDED.email,
@@ -157,13 +162,14 @@ async def build_customer_profiles():
                     bills = EXCLUDED.bills,
                     sources = EXCLUDED.sources,
                     last_activity = EXCLUDED.last_activity,
-                    updated_at = EXCLUDED.updated_at
+                    updated_at = EXCLUDED.updated_at,
+                    metadata = EXCLUDED.metadata
             """,
                 customer_id, phone, name, email, username,
                 len(all_orders), len(all_bills), round(total_spent, 2),
                 json_dumps(all_orders), json_dumps(all_bills),
                 list(set(group["sources"])),
-                last_activity, now
+                last_activity, now, json_dumps(metadata)
             )
 
         total = await conn.fetchval("SELECT COUNT(*) FROM customers")
@@ -178,7 +184,7 @@ async def get_all_customers():
             SELECT
                 customer_id, phone, name, email, username,
                 total_orders, total_bills, total_spent,
-                sources, comment_count, last_activity, updated_at
+                sources, comment_count, last_activity, updated_at, metadata
             FROM customers
             ORDER BY last_activity DESC NULLS LAST
         """)
@@ -188,18 +194,18 @@ async def get_all_customers():
 async def get_customer_by_id(customer_id: str):
     pool = get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM customers WHERE customer_id = $1 OR phone = $1",
-            customer_id
-        )
-        if row:
-            result = dict(row)
-            result["_id"] = result.pop("customer_id", "")
-            for col in ("orders", "bills"):
-                if isinstance(result.get(col), str):
-                    result[col] = json.loads(result[col])
-            return result
-        return None
+            row = await conn.fetchrow(
+                "SELECT customer_id, phone, name, email, username, total_orders, total_bills, total_spent, orders, bills, sources, comment_count, last_activity, created_at, updated_at, metadata FROM customers WHERE customer_id = $1 OR phone = $1",
+                customer_id
+            )
+            if row:
+                result = dict(row)
+                result["_id"] = result.pop("customer_id", "")
+                for col in ("orders", "bills", "metadata"):
+                    if isinstance(result.get(col), str):
+                        result[col] = json.loads(result[col])
+                return result
+            return None
 
 
 async def get_alerts():

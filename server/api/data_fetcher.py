@@ -58,6 +58,9 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     "order_id": f"bill_cust_{org_id}_{cust.get('id', '')}",
                     "phone": phone,
                     "customer_name": cust.get("name", ""),
+                    "customer_id": cust.get("id", ""),
+                    "address": cust.get("address", ""),
+                    "customer_total_spent": float(cust.get("totalSpent", 0) or 0),
                     "raw_data": {
                         "type": "customer",
                         "org_id": org_id,
@@ -66,6 +69,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     }
                 })
             for tx in org.get("transactions", []):
+                tx_customer = tx.get("customer", {})
                 all_transactions.append({
                     "order_id": f"bill_tx_{org_id}_{tx.get('id', '')}",
                     "phone": org_phone,
@@ -81,6 +85,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     "payment_status": tx.get("paymentStatus", ""),
                     "date": tx.get("date", ""),
                     "notes": tx.get("notes", ""),
+                    "address": tx_customer.get("address", "") if tx_customer else "",
                     "raw_transaction": tx
                 })
 
@@ -175,6 +180,9 @@ async def fetch_and_store_all():
                         "raw_data": doc["raw_data"],
                         "phone": doc["phone"],
                         "customer_name": doc["customer_name"],
+                        "customer_id": doc.get("customer_id", ""),
+                        "address": doc.get("address", ""),
+                        "customer_total_spent": doc.get("customer_total_spent", 0),
                         "fetched_at": datetime.utcnow()
                     }},
                     upsert=True
