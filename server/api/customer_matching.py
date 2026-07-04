@@ -3,7 +3,11 @@ from datetime import datetime
 from config.database import get_db
 from config.postgres import get_pool
 
-PAID_STATUSES = {"paid", "shipped", "delivered", "completed", "confirmed", "processing"}
+PAID_STATUSES = {
+    "paid", "shipped", "delivered", "completed", "confirmed", "processing",
+    "tracked", "shipping_selected", "printed", "packed",
+    "created", "dispatched"
+}
 
 
 async def build_customer_profiles():
