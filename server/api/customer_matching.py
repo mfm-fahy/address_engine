@@ -17,18 +17,18 @@ async def build_customer_profiles():
 
     bill_cust_id_to_phone = {}
     async for doc in raw_col.find({"source": "bill", "raw_data.type": "customer"}, {"phone": 1, "customer_id": 1}):
-        if doc.get("customer_id"):
-            bill_cust_id_to_phone[doc["customer_id"]] = doc.get("phone", "")
+        cid = doc.get("customer_id")
+        if cid:
+            bill_cust_id_to_phone[str(cid)] = doc.get("phone", "")
 
     bill_txs_by_phone = {}
     async for tx in db["bill_transactions"].find({}):
         phone = tx.get("phone", "")
         if not phone:
-            cid = tx.get("customer_id", "")
+            cid = str(tx.get("customer_id") or "")
             phone = bill_cust_id_to_phone.get(cid, "")
-        if phone not in bill_txs_by_phone:
-            bill_txs_by_phone[phone] = []
-        bill_txs_by_phone[phone].append(tx)
+        if phone:
+            bill_txs_by_phone.setdefault(phone, []).append(tx)
 
     pipeline = [
         {"$group": {
