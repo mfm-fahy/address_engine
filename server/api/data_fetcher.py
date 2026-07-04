@@ -41,6 +41,8 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
             if not data:
                 break
             orgs = data.get("organisations", [])
+            if not orgs:
+                break
             for org in orgs:
                 customers = org.get("customers", [])
                 transactions = org.get("transactions", [])
@@ -50,9 +52,8 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
                         "_bill_transactions": transactions,
                         "_org_name": org.get("name", "")
                     })
-            total = data.get("count", 0)
             offset += limit
-            if offset >= total:
+            if len(orgs) < limit:
                 break
         return all_orders
 
