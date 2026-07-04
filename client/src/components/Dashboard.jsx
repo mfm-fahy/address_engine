@@ -13,7 +13,6 @@ const SOURCES = [
   { key: 'instaxbot', label: 'Instagram', icon: Instagram, color: '#e1306c' },
   { key: 'gowhats', label: 'WhatsApp', icon: MessageCircle, color: '#25d366' },
   { key: 'f3', label: 'F3', icon: Globe, color: '#a855f7' },
-  { key: 'bill', label: 'Billzzy', icon: CreditCard, color: '#3b82f6' },
 ]
 
 export default function Dashboard() {
@@ -213,7 +212,7 @@ export default function Dashboard() {
           <div className="stat-body">
             <div className="label">Platforms Synced</div>
             <div className="value">4</div>
-            <div className="sub">GoWhats, InstaXbot, F3, Billzzy</div>
+            <div className="sub">GoWhats, InstaXbot, F3</div>
           </div>
         </div>
       </div>

@@ -7,7 +7,7 @@ import { fetchCustomers, fetchAlerts } from '../api'
 import { TrendingUp, Users, IndianRupee, AlertTriangle, RefreshCw } from 'lucide-react'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#3b82f6', '#e1306c', '#a855f7']
-const SOURCE_LABELS = { instaxbot: 'Instagram', gowhats: 'WhatsApp', f3: 'F3', bill: 'Billzzy' }
+const SOURCE_LABELS = { instaxbot: 'Instagram', gowhats: 'WhatsApp', f3: 'F3' }
 
 const fmt = (n) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(1)}K` : `₹${n}`
 
