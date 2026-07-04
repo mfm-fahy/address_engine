@@ -55,14 +55,15 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
             cust_id_to_phone = {}
             for cust in org.get("customers", []):
                 phone = normalize_phone(cust.get("phone", ""))
-                cust_id_to_phone[str(cust.get("id") or "")] = phone
+                cust_id_to_phone[str(cust.get("id"))] = phone
+                cust_address = build_billzzy_address(cust)
                 all_customers.append({
                     "source": "bill",
                     "order_id": f"bill_cust_{org_id}_{cust.get('id', '')}",
                     "phone": phone,
                     "customer_name": cust.get("name", ""),
-                    "customer_id": cust.get("id", ""),
-                    "address": cust.get("address", ""),
+                    "customer_id": str(cust.get("id", "")),
+                    "address": cust_address,
                     "customer_total_spent": float(cust.get("totalSpent", 0) or 0),
                     "raw_data": {
                         "type": "customer",
@@ -74,10 +75,10 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
 
             for tx in org.get("transactions", []):
                 tx_customer = tx.get("customer", {})
-                tx_cust_id = str(tx_customer.get("id") or tx.get("customerId") or tx.get("customer_id") or "")
+                tx_customer_id = str(tx.get("customerId") or tx.get("customer_id") or "")
                 tx_phone = (
                     normalize_phone(tx_customer.get("phone", "") or tx_customer.get("mobile", ""))
-                    or cust_id_to_phone.get(tx_cust_id)
+                    or cust_id_to_phone.get(tx_customer_id)
                     or org_phone
                 )
                 all_transactions.append({
@@ -95,7 +96,7 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                     "payment_status": tx.get("paymentStatus", ""),
                     "date": tx.get("date", ""),
                     "notes": tx.get("notes", ""),
-                    "customer_id": tx_cust_id or "",
+                    "customer_id": tx_customer_id,
                     "address": tx_customer.get("address", "") if tx_customer else "",
                     "raw_transaction": tx
                 })
@@ -270,6 +271,16 @@ async def fetch_and_store_all():
             print(f"  -> 0 orders")
 
     return all_results
+
+def build_billzzy_address(cust: dict) -> str:
+    addr = cust.get("address", "") or ""
+    if addr:
+        return addr
+    parts = [cust.get("flatNo", ""), cust.get("street", ""),
+             cust.get("district", ""), cust.get("state", ""),
+             cust.get("pincode", "")]
+    return ", ".join(p for p in parts if p)
+
 
 def extract_phone(source: str, order: dict) -> str:
     if source == "gowhats":

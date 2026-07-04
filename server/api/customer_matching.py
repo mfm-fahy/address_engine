@@ -17,7 +17,7 @@ async def build_customer_profiles():
 
     bill_cust_id_to_phone = {}
     async for doc in raw_col.find({"source": "bill", "raw_data.type": "customer"}, {"phone": 1, "customer_id": 1}):
-        cid = doc.get("customer_id")
+        cid = doc.get("customer_id", "")
         if cid:
             bill_cust_id_to_phone[str(cid)] = doc.get("phone", "")
 
@@ -25,10 +25,11 @@ async def build_customer_profiles():
     async for tx in db["bill_transactions"].find({}):
         phone = tx.get("phone", "")
         if not phone:
-            cid = str(tx.get("customer_id") or "")
-            phone = bill_cust_id_to_phone.get(cid, "")
-        if phone:
-            bill_txs_by_phone.setdefault(phone, []).append(tx)
+            cid = tx.get("customer_id", "")
+            phone = bill_cust_id_to_phone.get(str(cid), "")
+        if phone not in bill_txs_by_phone:
+            bill_txs_by_phone[phone] = []
+        bill_txs_by_phone[phone].append(tx)
 
     pipeline = [
         {"$group": {
@@ -127,7 +128,11 @@ async def build_customer_profiles():
                     bill_total_from_api = float(rec.get("customer_total_spent", 0) or 0)
                     if cust:
                         metadata = {k: cust[k] for k in cust if k != "id"}
-                        address = cust.get("address", "")
+                        address = cust.get("address", "") or ", ".join(
+                            p for p in [cust.get("flatNo", ""), cust.get("street", ""),
+                                        cust.get("district", ""), cust.get("state", ""),
+                                        cust.get("pincode", "")] if p
+                        )
                         bill_customer_id = cust.get("id", "")
                     for b in (cust.get("bills") or cust.get("transactions") or []):
                         all_bills.append({
