@@ -32,31 +32,6 @@ async def fetch_url(url: str, api_key: str, params: dict = {}, timeout: int = 60
 async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_request_timeout: int = 60):
     all_orders = []
 
-    # Billzzy: organisations with nested customers + transactions, paginated by offset
-    if source_name == "bill":
-        limit = 20
-        offset = 0
-        while True:
-            data = await fetch_url(url, api_key, params={"limit": limit, "offset": offset}, timeout=per_request_timeout)
-            if not data:
-                break
-            orgs = data.get("organisations", [])
-            if not orgs:
-                break
-            for org in orgs:
-                customers = org.get("customers", [])
-                transactions = org.get("transactions", [])
-                for cust in customers:
-                    all_orders.append({
-                        "_bill_customer": cust,
-                        "_bill_transactions": transactions,
-                        "_org_name": org.get("name", "")
-                    })
-            offset += limit
-            if len(orgs) < limit:
-                break
-        return all_orders
-
     # F3: single page, no pagination
     if source_name == "f3":
         data = await fetch_url(url, api_key, timeout=per_request_timeout)
@@ -164,9 +139,6 @@ def extract_phone(source: str, order: dict) -> str:
     elif source == "f3":
         cust = order.get("customerDetails", {})
         return cust.get("phone", order.get("customerPhone", ""))
-    elif source == "bill":
-        cust = order.get("_bill_customer", {})
-        return cust.get("phone", "")
     return ""
 
 def extract_name(source: str, order: dict) -> str:
@@ -177,7 +149,4 @@ def extract_name(source: str, order: dict) -> str:
     elif source == "f3":
         cust = order.get("customerDetails", {})
         return cust.get("name", order.get("customerName", ""))
-    elif source == "bill":
-        cust = order.get("_bill_customer", {})
-        return cust.get("name", "")
     return ""

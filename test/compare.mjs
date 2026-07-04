@@ -51,16 +51,6 @@ function getRecords(data) {
     })).filter(r => r.phone);
   }
 
-  // bill_*.json: { organisation, orders: [...] }
-  if (data?.orders && Array.isArray(data.orders) && data.orders[0]?.customer?.mobile !== undefined) {
-    return data.orders.map(o => ({
-      phone: normalizePhone(o.customer.mobile),
-      source: 'Billzzy',
-      id: o.billNo,
-      record: o
-    })).filter(r => r.phone);
-  }
-
   return [];
 }
 

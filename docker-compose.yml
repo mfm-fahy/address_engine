@@ -36,6 +36,9 @@ services:
       - "8000:8000"
     env_file:
       - ./server/.env
+    environment:
+      - DATABASE_URL=postgresql://customer360:customer360@postgres:5432/customer360
+      - PYTHONUNBUFFERED=1
     depends_on:
       postgres:
         condition: service_healthy

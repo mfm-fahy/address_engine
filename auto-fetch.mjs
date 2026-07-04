@@ -17,11 +17,6 @@ const APIS = [
     url: 'https://f3engine.com/api/external/orders',
     token: process.env.F3_API_KEY || ''
   },
-  {
-    name: 'billzzy',
-    url: 'https://billzzy.com/api/partner/orders',
-    token: process.env.BILLZZY_API_KEY || ''
-  }
 ];
 
 const DATA_DIR = 'data';
@@ -67,11 +62,6 @@ function extractRecords(data) {
   if (data?.data?.orders && data.data.orders[0]?.billNo !== undefined) {
     return data.data.orders.map(o => ({
       phone: normalizePhone(o.customer?.phone), source: 'Bill Orders', id: o.orderId, record: o
-    })).filter(r => r.phone);
-  }
-  if (data?.orders && Array.isArray(data.orders) && data.orders[0]?.customer?.mobile !== undefined) {
-    return data.orders.map(o => ({
-      phone: normalizePhone(o.customer.mobile), source: 'Billzzy', id: o.billNo, record: o
     })).filter(r => r.phone);
   }
   return [];
