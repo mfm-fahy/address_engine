@@ -62,6 +62,7 @@ async def build_customer_profiles():
             all_bills = []
             total_spent = 0.0
             bill_total_from_api = 0.0
+            metadata = {}
 
             for rec in records:
                 data = rec["data"]
