@@ -70,9 +70,10 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                 })
             for tx in org.get("transactions", []):
                 tx_customer = tx.get("customer", {})
+                tx_phone = normalize_phone(tx_customer.get("phone", "") or tx_customer.get("mobile", "")) or org_phone
                 all_transactions.append({
                     "order_id": f"bill_tx_{org_id}_{tx.get('id', '')}",
-                    "phone": org_phone,
+                    "phone": tx_phone,
                     "org_id": org_id,
                     "org_name": org_name,
                     "bill_id": tx.get("id"),
