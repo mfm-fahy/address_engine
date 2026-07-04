@@ -36,7 +36,8 @@ async def build_customer_profiles():
             "records": {"$push": {
                 "source": "$source",
                 "data": "$raw_data",
-                "customer_name": "$customer_name"
+                "customer_name": "$customer_name",
+                "customer_total_spent": "$customer_total_spent"
             }},
             "names": {"$addToSet": "$customer_name"},
             "sources": {"$addToSet": "$source"}
@@ -59,6 +60,7 @@ async def build_customer_profiles():
             all_orders = []
             all_bills = []
             total_spent = 0.0
+            bill_total_from_api = 0.0
 
             for rec in records:
                 data = rec["data"]
@@ -122,26 +124,41 @@ async def build_customer_profiles():
                         email = cust["email"]
                     if cust.get("name"):
                         name = cust["name"]
+                    bill_total_from_api = float(rec.get("customer_total_spent", 0) or 0)
                     if cust:
                         metadata = {k: cust[k] for k in cust if k != "id"}
                         address = cust.get("address", "")
                         bill_customer_id = cust.get("id", "")
+                    for b in (cust.get("bills") or cust.get("transactions") or []):
+                        all_bills.append({
+                            "transaction_id": b.get("id") or b.get("billId"),
+                            "bill_no": b.get("billNo") or b.get("bill_no"),
+                            "amount": float(b.get("totalPrice") or b.get("amount") or 0),
+                            "status": b.get("status", ""),
+                            "payment_status": b.get("paymentStatus", ""),
+                            "items": b.get("items") or b.get("order") or [],
+                            "date": b.get("date", ""),
+                        "org_name": data.get("org_name", "")
+                    })
 
-            tx_docs = bill_txs_by_phone.get(phone, [])
-            for tx in tx_docs:
-                all_bills.append({
-                    "transaction_id": tx.get("bill_id"),
-                    "bill_no": tx.get("bill_no"),
-                    "amount": tx.get("amount", 0),
-                    "status": tx.get("status", ""),
-                    "payment_status": tx.get("payment_status", ""),
-                    "items": [],
-                    "date": tx.get("date", ""),
-                    "org_name": tx.get("org_name", ""),
-                    "address": tx.get("address", "")
-                })
-                if tx.get("status", "").lower() in PAID_STATUSES:
-                    total_spent += float(tx.get("amount", 0) or 0)
+            if not all_bills:
+                tx_docs = bill_txs_by_phone.get(phone, [])
+                for tx in tx_docs:
+                    all_bills.append({
+                        "transaction_id": tx.get("bill_id"),
+                        "bill_no": tx.get("bill_no"),
+                        "amount": tx.get("amount", 0),
+                        "status": tx.get("status", ""),
+                        "payment_status": tx.get("payment_status", ""),
+                        "items": [],
+                        "date": tx.get("date", ""),
+                        "org_name": tx.get("org_name", ""),
+                        "address": tx.get("address", "")
+                    })
+                    if tx.get("status", "").lower() in PAID_STATUSES:
+                        total_spent += float(tx.get("amount", 0) or 0)
+                if not tx_docs and bill_total_from_api:
+                    total_spent = bill_total_from_api
 
             customer_id = f"CUST{phone}"
 
