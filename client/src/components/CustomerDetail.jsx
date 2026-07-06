@@ -1,14 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShoppingCart, MessageCircle, Receipt, IndianRupee, AlertTriangle, ChevronDown, ChevronUp, Package, MapPin, CreditCard, Truck, Clock, Store } from 'lucide-react'
+import {
+  ArrowLeft, ShoppingCart, MessageCircle, IndianRupee,
+  AlertTriangle, ChevronDown, ChevronUp, Package, MapPin,
+  CreditCard, Truck, Clock, Store, Phone, Mail, User,
+  Calendar, Shield, BadgePercent, Activity
+} from 'lucide-react'
 import { fetchCustomer } from '../api'
+import { SkeletonDetail, EmptyState } from './ui'
 
 function ExpandableSection({ title, count, children, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen || false)
   return (
-    <div className="detail-card">
-      <div className="expandable-header" onClick={() => setOpen(!open)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>{title} ({count})</h3>
+    <div className="detail-card-section">
+      <div className="expandable-header" onClick={() => setOpen(!open)}>
+        <h3>{title} ({count})</h3>
         {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </div>
       {open && <div style={{ marginTop: 12 }}>{children}</div>}
@@ -22,7 +28,7 @@ function OrderItems({ items }) {
     <div className="items-list">
       {items.map((item, i) => (
         <div key={i} className="item-row">
-          {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="item-thumb" />}
+          {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="item-thumb" loading="lazy" />}
           <div className="item-info">
             <div className="item-name">{item.name}</div>
             <div className="item-meta">
@@ -76,7 +82,7 @@ function StatusHistory({ raw }) {
   const history = raw?.metadata?.statusHistory || raw?.statusHistory
   if (!history || history.length === 0) return null
   return (
-    <div className="timeline">
+    <div className="timeline" style={{ marginTop: 8 }}>
       <div className="detail-label">Status History</div>
       {history.map((h, i) => (
         <div key={i} className="timeline-item">
@@ -138,7 +144,9 @@ function OrderDetailCard({ order }) {
       </div>
 
       {raw.salesPersonName && (
-        <div className="detail-row"><span className="detail-muted">Sales Person: {raw.salesPersonName}</span></div>
+        <div className="detail-row">
+          <span className="detail-muted">Sales Person: {raw.salesPersonName}</span>
+        </div>
       )}
 
       <div style={{ marginTop: 8 }}>
@@ -155,7 +163,7 @@ function OrderDetailCard({ order }) {
         </div>
       )}
 
-      {raw._id && <div className="detail-muted" style={{ fontSize: 10, marginTop: 4 }}>ID: {raw._id}</div>}
+      {raw._id && <div className="detail-muted" style={{ fontSize: 10, marginTop: 4, color: 'var(--text-dim)' }}>ID: {raw._id}</div>}
     </div>
   )
 }
@@ -186,7 +194,7 @@ function BillDetailCard({ bill }) {
         <div className="detail-label">Products ({bill.items?.length || 0})</div>
         <OrderItems items={bill.items} />
       </div>
-      {raw.internalBillNo && <div className="detail-muted" style={{ fontSize: 10, marginTop: 4 }}>Internal: {raw.internalBillNo}</div>}
+      {raw.internalBillNo && <div className="detail-muted" style={{ fontSize: 10, marginTop: 4, color: 'var(--text-dim)' }}>Internal: {raw.internalBillNo}</div>}
     </div>
   )
 }
@@ -211,8 +219,8 @@ export default function CustomerDetail() {
     load()
   }, [id])
 
-  if (loading) return <div className="loading">Loading customer...</div>
-  if (!customer) return <div className="empty-state"><h3>Customer not found</h3></div>
+  if (loading) return <SkeletonDetail />
+  if (!customer) return <EmptyState icon={User} title="Customer not found" description="The customer you're looking for doesn't exist or has been removed." />
 
   const allActivity = [
     ...(customer.orders || []).map(o => ({ ...o, type: 'order' })),
@@ -226,11 +234,18 @@ export default function CustomerDetail() {
       </button>
 
       <div className="detail-header">
-        <h2>{customer.name || 'Unknown Customer'}</h2>
-        <div className="meta">
-          {customer.customer_id} &middot; +91 {customer.phone}
-          {customer.email ? ` &middot; ${customer.email}` : ''}
-          {customer.username ? ` &middot; @${customer.username}` : ''}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div>
+            <h2>{customer.name || 'Unknown Customer'}</h2>
+            <div className="meta">
+              {customer.customer_id} &middot; +91 {customer.phone}
+              {customer.email ? ` &middot; ${customer.email}` : ''}
+              {customer.username ? ` &middot; @${customer.username}` : ''}
+            </div>
+          </div>
+          {customer.total_spent >= 50000 && (
+            <span className="badge badge-vip" style={{ fontSize: 12, padding: '4px 12px' }}>VIP</span>
+          )}
         </div>
         {customer.metadata?.flatNo && (
           <div className="meta" style={{ fontSize: 13, marginTop: 4 }}>
@@ -253,12 +268,12 @@ export default function CustomerDetail() {
       </div>
 
       <div className="detail-grid">
-        <div className="detail-card">
+        <div className="detail-card-section">
           <h3><IndianRupee size={14} /> Summary</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="summary-row">
               <span className="detail-muted">Total Spent</span>
-              <span className="summary-value" style={{ color: 'var(--success)' }}>₹{customer.total_spent?.toLocaleString()}</span>
+              <span className="summary-value" style={{ color: 'var(--success)' }}>₹{isFinite(customer.total_spent) ? customer.total_spent.toLocaleString() : 0}</span>
             </div>
             <div className="summary-row">
               <span className="detail-muted">Total Orders</span>
@@ -274,20 +289,22 @@ export default function CustomerDetail() {
             </div>
             <div className="summary-row">
               <span className="detail-muted">Last Activity</span>
-              <span className="summary-value" style={{ fontSize: 12 }}>{customer.last_activity ? new Date(customer.last_activity).toLocaleDateString() : '-'}</span>
+              <span className="summary-value" style={{ fontSize: 12, fontWeight: 500 }}>{customer.last_activity ? new Date(customer.last_activity).toLocaleDateString() : '-'}</span>
             </div>
           </div>
         </div>
 
-        <div className="alerts-panel">
-          <h3><AlertTriangle size={14} /> Alerts ({customer.alerts?.length || 0})</h3>
+        <div className="alerts-panel-section" style={customer.alerts?.length > 0 ? { border: '1px solid rgba(239, 68, 68, 0.25)' } : {}}>
+          <h3 style={customer.alerts?.length > 0 ? { color: 'var(--danger)' } : {}}>
+            <AlertTriangle size={14} /> Alerts ({customer.alerts?.length || 0})
+          </h3>
           {customer.alerts?.length === 0 || !customer.alerts ? (
-            <div className="detail-muted">No alerts</div>
+            <div className="detail-muted" style={{ textAlign: 'center', padding: 20 }}>No alerts</div>
           ) : (
             customer.alerts.map((a, i) => (
-              <div key={i} className={`alert-item ${a.severity}`}>
+              <div key={i} className={`alert-item ${a.severity === 'warning' ? 'warning' : 'error'}`}>
                 <AlertTriangle size={16} className="alert-icon" style={{ color: a.severity === 'warning' ? 'var(--warning)' : 'var(--danger)' }} />
-                <div>
+                <div style={{ flex: 1 }}>
                   <div className="alert-text">{a.message}</div>
                   <div className="alert-time">{new Date(a.created_at).toLocaleString()}</div>
                 </div>
@@ -298,14 +315,14 @@ export default function CustomerDetail() {
       </div>
 
       {customer.stores?.length > 0 && (
-        <div className="detail-card stores-section">
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Store size={14} /> Stores Purchased From ({customer.stores.length})</h3>
+        <div className="detail-card-section stores-section">
+          <h3><Store size={14} /> Stores Purchased From ({customer.stores.length})</h3>
           <div className="stores-grid">
             {customer.stores.map((store, i) => (
               <div key={i} className="store-card">
                 <div className="store-name">{store.name}</div>
                 <div className="store-meta">
-                  <span className={`pill ${store.type === 'bill_org' ? 'pill-bill' : 'pill-retailer'}`}>
+                  <span className={`pill ${store.type === 'bill_org' ? 'badge-bill' : 'badge-f3'}`}>
                     {store.type === 'bill_org' ? 'Bill' : 'Retailer'}
                   </span>
                   <span className="pill pill-info">
@@ -319,7 +336,7 @@ export default function CustomerDetail() {
                   </div>
                   <div className="store-stat">
                     <IndianRupee size={12} />
-                    <span>₹{store.total_spent?.toLocaleString()}</span>
+                    <span>₹{isFinite(store.total_spent) ? store.total_spent.toLocaleString() : 0}</span>
                   </div>
                 </div>
               </div>
@@ -331,7 +348,7 @@ export default function CustomerDetail() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <ExpandableSection title="Orders" count={customer.orders?.length || 0} defaultOpen={true}>
           {customer.orders?.length === 0 ? (
-            <div className="detail-muted">No orders yet</div>
+            <div className="detail-muted" style={{ textAlign: 'center', padding: 12 }}>No orders yet</div>
           ) : (
             customer.orders.map((o, i) => <OrderDetailCard key={i} order={o} />)
           )}
@@ -339,7 +356,7 @@ export default function CustomerDetail() {
 
         <ExpandableSection title="Bills" count={customer.bills?.length || 0} defaultOpen={true}>
           {customer.bills?.length === 0 ? (
-            <div className="detail-muted">No bills yet</div>
+            <div className="detail-muted" style={{ textAlign: 'center', padding: 12 }}>No bills yet</div>
           ) : (
             customer.bills.map((b, i) => <BillDetailCard key={i} bill={b} />)
           )}
@@ -348,12 +365,15 @@ export default function CustomerDetail() {
         {allActivity.length > 0 && (
           <ExpandableSection title="Activity Timeline" count={allActivity.length}>
             {allActivity.slice(0, 50).map((a, i) => (
-              <div key={i} className="order-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 0', borderBottom: '1px solid var(--border-subtle)'
+              }}>
                 <div>
                   <span style={{ fontWeight: 600, fontSize: 13 }}>
                     {a.type === 'order' ? 'Order' : 'Bill'} #{a.order_id || a.bill_no}
                   </span>
-                  <div className="detail-muted" style={{ fontSize: 12 }}>
+                  <div className="detail-muted" style={{ fontSize: 12, marginTop: 2 }}>
                     {a.source} &middot; ₹{a.amount}
                   </div>
                 </div>

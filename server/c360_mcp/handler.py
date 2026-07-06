@@ -5,26 +5,82 @@ from typing import Any
 
 import asyncpg
 
+from services.customer_service import CustomerService
+from services.alert_service import AlertService
+from services.dashboard_service import DashboardService
+from services.recommendation_service import RecommendationService
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://customer360:customer360@localhost:5432/customer360",
 )
 
 _pool: asyncpg.Pool = None
+_customer_svc: CustomerService = None
+_alert_svc: AlertService = None
+_dashboard_svc: DashboardService = None
+_rec_svc: RecommendationService = None
+
+
+async def _create_pool() -> asyncpg.Pool:
+    return await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+
+
+def _init_services(pool: asyncpg.Pool):
+    global _customer_svc, _alert_svc, _dashboard_svc, _rec_svc
+    from repositories.customer_repo import CustomerRepository
+    from repositories.alert_repo import AlertRepository
+    from repositories.dashboard_repo import DashboardRepository
+    from repositories.recommendation_repo import RecommendationRepository
+    from services.feature_engine import FeatureEngine
+    from services.rule_engine import RuleEngine
+    _customer_svc = CustomerService(CustomerRepository(pool=pool))
+    _alert_svc = AlertService(AlertRepository(pool=pool))
+    _dashboard_svc = DashboardService(DashboardRepository(pool=pool))
+    _rec_svc = RecommendationService(
+        customer_repo=CustomerRepository(pool=pool),
+        rec_repo=RecommendationRepository(pool=pool),
+        feature_engine=FeatureEngine(),
+        rule_engine=RuleEngine(),
+    )
 
 
 async def get_pool() -> asyncpg.Pool:
-    global _pool
-    if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+    global _pool, _customer_svc, _alert_svc, _dashboard_svc
+    if _pool is not None:
+        return _pool
+
+    # Try to use the shared application pool first
+    try:
+        from config.postgres import get_pool as get_main_pool
+        main_pool = get_main_pool()
+        if main_pool is not None:
+            _pool = main_pool
+            _init_services(_pool)
+            return _pool
+    except (ImportError, Exception):
+        pass
+
+    # Fallback: create dedicated pool (standalone mode)
+    _pool = await _create_pool()
+    _init_services(_pool)
     return _pool
 
 
 async def close_pool():
-    global _pool
+    global _pool, _customer_svc, _alert_svc, _dashboard_svc
     if _pool:
-        await _pool.close()
+        # Only close if this is our own pool (not the shared one)
+        try:
+            from config.postgres import get_pool as get_main_pool
+            if get_main_pool() is not _pool:
+                await _pool.close()
+        except (ImportError, Exception):
+            await _pool.close()
         _pool = None
+        _customer_svc = None
+        _alert_svc = None
+        _dashboard_svc = None
 
 
 def json_serialize(obj: Any) -> Any:
@@ -126,60 +182,34 @@ async def handle_list_resources():
 
 
 async def handle_read_resource(uri: str) -> str:
-    pool = await get_pool()
+    await get_pool()
 
     if uri == "customers://list":
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                """SELECT customer_id, phone, name, email, username,
-                          total_orders, total_bills, total_spent,
-                          sources, comment_count, last_activity, updated_at
-                   FROM customers ORDER BY last_activity DESC NULLS LAST"""
-            )
-            data = [clean_row(dict(r)) for r in rows]
+        rows = await _customer_svc.get_all()
+        data = [{k: json_serialize(v) for k, v in row.items()
+                 if k in ("customer_id", "phone", "name", "email", "username",
+                          "total_orders", "total_bills", "total_spent",
+                          "sources", "comment_count", "last_activity", "updated_at")}
+                for row in rows]
         return json.dumps(data, default=str, indent=2)
 
     if uri == "customers://training/export":
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM customers ORDER BY last_activity DESC NULLS LAST"
-            )
-            data = [format_training_record(dict(r)) for r in rows]
+        rows = await _customer_svc.get_training_data()
+        data = [format_training_record(row) for row in rows]
         return json.dumps(data, default=str, indent=2)
 
     if uri == "customers://stats":
-        async with pool.acquire() as conn:
-            stats = await conn.fetchrow(
-                """SELECT COUNT(*) as total,
-                          COALESCE(SUM(total_orders), 0) as total_orders,
-                          COALESCE(SUM(total_bills), 0) as total_bills,
-                          COALESCE(SUM(total_spent), 0) as total_revenue,
-                          COALESCE(AVG(total_spent), 0) as avg_revenue,
-                          COALESCE(SUM(comment_count), 0) as total_comments
-                   FROM customers"""
-            )
-            sources = await conn.fetch(
-                """SELECT unnest(sources) as src, COUNT(*) as cnt
-                   FROM customers GROUP BY src ORDER BY cnt DESC"""
-            )
-            data = {
-                "total_customers": stats["total"],
-                "total_orders": stats["total_orders"],
-                "total_bills": stats["total_bills"],
-                "total_revenue": float(stats["total_revenue"]),
-                "avg_revenue_per_customer": round(float(stats["avg_revenue"]), 2),
-                "total_comments": stats["total_comments"],
-                "by_source": {r["src"]: r["cnt"] for r in sources},
-            }
+        data = await _dashboard_svc.get_stats()
         return json.dumps(data, default=str, indent=2)
 
     if uri == "alerts://list":
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM alerts ORDER BY created_at DESC LIMIT 100"
-            )
-            data = [clean_row(dict(r)) for r in rows]
+        rows = await _alert_svc.get_all(limit=100)
+        data = [clean_row(r) for r in rows]
         return json.dumps(data, default=str, indent=2)
+
+    if uri == "recommendations://list":
+        rows = await _rec_svc.get_all(status="active", limit=100)
+        return json.dumps(rows, default=str, indent=2)
 
     raise ValueError(f"Unknown resource URI: {uri}")
 
@@ -239,21 +269,32 @@ async def handle_list_tools():
                 },
             },
         ),
+        Tool(
+            name="get_customer_recommendations",
+            description="Get AI-powered recommendations for a specific customer",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "Customer ID (e.g. CUST91...)",
+                    }
+                },
+                "required": ["customer_id"],
+            },
+        ),
     ]
 
 
 async def handle_call_tool(name: str, arguments: dict = None):
     from mcp.types import TextContent
 
-    pool = await get_pool()
+    await get_pool()
     args = arguments or {}
 
     if name == "export_training_data":
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM customers ORDER BY last_activity DESC NULLS LAST"
-            )
-            data = [format_training_record(dict(r)) for r in rows]
+        rows = await _customer_svc.get_training_data()
+        data = [format_training_record(row) for row in rows]
         return [
             TextContent(
                 type="text",
@@ -291,35 +332,23 @@ async def handle_call_tool(name: str, arguments: dict = None):
         cid = args.get("id", "")
         if not cid:
             raise ValueError("id is required")
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM customers WHERE customer_id = $1 OR phone = $1", cid
-            )
-            if not row:
-                return [TextContent(type="text", text=json.dumps({"error": "Customer not found"}))]
-            data = clean_row(dict(row))
-            for col in ("orders", "bills", "metadata", "stores"):
-                if isinstance(data.get(col), str):
-                    data[col] = json.loads(data[col])
+        from repositories.customer_repo import CustomerRepository
+        pool = await get_pool()
+        row = await CustomerRepository(pool=pool).get_by_id_raw(cid)
+        if not row:
+            return [TextContent(type="text", text=json.dumps({"error": "Customer not found"}))]
+        data = clean_row(row)
+        for col in ("orders", "bills", "metadata", "stores"):
+            if isinstance(data.get(col), str):
+                data[col] = json.loads(data[col])
         return [TextContent(type="text", text=json.dumps(data, default=str, indent=2))]
 
     if name == "search_customers":
         q = args.get("query", "")
         if not q:
             raise ValueError("query is required")
-        pattern = f"%{q}%"
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                """SELECT customer_id, phone, name, email, username,
-                          total_orders, total_bills, total_spent,
-                          sources, comment_count, last_activity
-                   FROM customers
-                   WHERE name ILIKE $1 OR email ILIKE $1
-                      OR phone ILIKE $1 OR username ILIKE $1
-                   ORDER BY last_activity DESC NULLS LAST""",
-                pattern,
-            )
-            data = [clean_row(dict(r)) for r in rows]
+        rows = await _customer_svc.search(q)
+        data = [clean_row(r) for r in rows]
         return [
             TextContent(
                 type="text",
@@ -332,43 +361,34 @@ async def handle_call_tool(name: str, arguments: dict = None):
         ]
 
     if name == "get_customer_stats":
-        async with pool.acquire() as conn:
-            stats = await conn.fetchrow(
-                """SELECT COUNT(*) as total,
-                          COALESCE(SUM(total_orders), 0) as total_orders,
-                          COALESCE(SUM(total_bills), 0) as total_bills,
-                          COALESCE(SUM(total_spent), 0) as total_revenue,
-                          COALESCE(AVG(total_spent), 0) as avg_revenue,
-                          COALESCE(SUM(comment_count), 0) as total_comments
-                   FROM customers"""
-            )
-            sources = await conn.fetch(
-                """SELECT unnest(sources) as src, COUNT(*) as cnt
-                   FROM customers GROUP BY src ORDER BY cnt DESC"""
-            )
-            data = {
-                "total_customers": stats["total"],
-                "total_orders": stats["total_orders"],
-                "total_bills": stats["total_bills"],
-                "total_revenue": float(stats["total_revenue"]),
-                "avg_revenue_per_customer": round(float(stats["avg_revenue"]), 2),
-                "total_comments": stats["total_comments"],
-                "by_source": {r["src"]: r["cnt"] for r in sources},
-            }
+        data = await _dashboard_svc.get_stats()
         return [TextContent(type="text", text=json.dumps(data, default=str, indent=2))]
 
     if name == "get_alerts":
         limit = args.get("limit", 50)
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM alerts ORDER BY created_at DESC LIMIT $1", limit
-            )
-            data = [clean_row(dict(r)) for r in rows]
+        rows = await _alert_svc.get_all(limit=limit)
+        data = [clean_row(r) for r in rows]
         return [
             TextContent(
                 type="text",
                 text=json.dumps(
                     {"total": len(data), "alerts": data}, default=str, indent=2
+                ),
+            )
+        ]
+
+    if name == "get_customer_recommendations":
+        cid = args.get("customer_id", "")
+        if not cid:
+            raise ValueError("customer_id is required")
+        rows = await _rec_svc.get_by_customer_id(cid)
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"customer_id": cid, "total": len(rows), "recommendations": rows},
+                    default=str,
+                    indent=2,
                 ),
             )
         ]

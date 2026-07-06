@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { Users, Lock, Eye, EyeOff } from 'lucide-react'
+import { Users, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function Login() {
   const { login } = useAuth()
@@ -34,36 +34,49 @@ export default function Login() {
           <p>Sign in to your dashboard</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" noValidate>
           <div className="login-field">
-            <label>Username</label>
+            <label htmlFor="username">Username</label>
             <input
+              id="username"
               type="text"
               placeholder="Enter username"
               value={form.username}
               onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
               autoFocus
               required
+              autoComplete="username"
             />
           </div>
 
           <div className="login-field">
-            <label>Password</label>
+            <label htmlFor="password">Password</label>
             <div className="login-pass-wrap">
               <input
+                id="password"
                 type={showPass ? 'text' : 'password'}
                 placeholder="Enter password"
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required
+                autoComplete="current-password"
               />
-              <button type="button" className="pass-toggle" onClick={() => setShowPass(s => !s)}>
+              <button
+                type="button"
+                className="pass-toggle"
+                onClick={() => setShowPass(s => !s)}
+                aria-label={showPass ? 'Hide password' : 'Show password'}
+              >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
-          {error && <div className="login-error"><Lock size={14} /> {error}</div>}
+          {error && (
+            <div className="login-error" role="alert">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
 
           <button type="submit" className="btn btn-primary login-submit" disabled={loading}>
             {loading ? <span className="spin-inline" /> : null}

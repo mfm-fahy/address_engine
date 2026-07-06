@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { Users, BarChart2, LogOut, Bell } from 'lucide-react'
+import { LayoutDashboard, BarChart3, LogOut, Bell, Users } from 'lucide-react'
 
 export default function Navbar({ alertCount = 0 }) {
   const { user, logout } = useAuth()
@@ -12,29 +12,34 @@ export default function Navbar({ alertCount = 0 }) {
   }
 
   return (
-    <nav className="navbar">
-      <div className="navbar-brand">
-        <Users size={20} />
-        <span>Customer360</span>
-      </div>
+    <nav className="navbar" role="navigation" aria-label="Main navigation">
+      <NavLink to="/" className="navbar-brand" aria-label="Dashboard home">
+        <div className="navbar-brand-icon">
+          <Users size={18} />
+        </div>
+        <span className="navbar-brand-text">Customer360</span>
+      </NavLink>
       <div className="navbar-links">
         <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <Users size={15} /> Customers
+          <LayoutDashboard size={15} />
+          <span>Dashboard</span>
         </NavLink>
         <NavLink to="/analytics" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <BarChart2 size={15} /> Analytics
+          <BarChart3 size={15} />
+          <span>Analytics</span>
         </NavLink>
       </div>
       <div className="navbar-right">
         {alertCount > 0 && (
-          <div className="nav-alert-badge">
-            <Bell size={15} />
+          <div className="nav-alert-badge" role="status" aria-label={`${alertCount} alerts`}>
+            <Bell size={14} />
             <span>{alertCount}</span>
           </div>
         )}
-        <span className="nav-user">{user}</span>
-        <button className="btn btn-outline btn-sm" onClick={handleLogout}>
-          <LogOut size={13} /> Logout
+        {user && <span className="nav-user" title={user}>{user}</span>}
+        <button className="btn btn-ghost btn-sm" onClick={handleLogout} aria-label="Sign out">
+          <LogOut size={13} />
+          <span>Sign Out</span>
         </button>
       </div>
     </nav>

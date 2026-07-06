@@ -5,6 +5,7 @@ import CustomerDetail from './components/CustomerDetail'
 import Analytics from './components/Analytics'
 import Login from './components/Login'
 import Navbar from './components/Navbar'
+import { ToastProvider } from './components/ui'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -12,9 +13,11 @@ function Protected({ children }) {
 }
 
 function Layout({ children }) {
+  const { user } = useAuth()
+  const alertCount = 0
   return (
     <div className="layout">
-      <Navbar />
+      <Navbar alertCount={alertCount} />
       <main className="main-content">{children}</main>
     </div>
   )
@@ -22,14 +25,16 @@ function Layout({ children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Protected><Layout><Dashboard /></Layout></Protected>} />
-        <Route path="/customer/:id" element={<Protected><Layout><CustomerDetail /></Layout></Protected>} />
-        <Route path="/analytics" element={<Protected><Layout><Analytics /></Layout></Protected>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Protected><Layout><Dashboard /></Layout></Protected>} />
+          <Route path="/customer/:id" element={<Protected><Layout><CustomerDetail /></Layout></Protected>} />
+          <Route path="/analytics" element={<Protected><Layout><Analytics /></Layout></Protected>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
   )
 }
