@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-from config.database import get_db
 from config.postgres import get_pool
 
 PAID_STATUSES = {
@@ -11,58 +10,61 @@ PAID_STATUSES = {
 
 
 async def build_customer_profiles():
-    db = get_db()
-    raw_col = db["raw_orders"]
     pool = get_pool()
 
-    bill_cust_id_to_phone = {}
-    async for doc in raw_col.find({"source": "bill", "raw_data.type": "customer"}, {"phone": 1, "customer_id": 1}):
-        cid = doc.get("customer_id", "")
-        if cid:
-            bill_cust_id_to_phone[str(cid)] = doc.get("phone", "")
+    async with pool.acquire() as conn:
+        bill_cust_id_to_phone = {}
+        rows = await conn.fetch("SELECT phone, customer_id FROM raw_orders WHERE source = 'bill' AND raw_data->>'type' = 'customer'")
+        for r in rows:
+            cid = r["customer_id"]
+            if cid:
+                bill_cust_id_to_phone[str(cid)] = r["phone"]
 
-    bill_txs_by_phone = {}
-    bill_txs_by_id = {}
-    async for tx in db["bill_transactions"].find({}):
-        phone = tx.get("phone", "")
-        if not phone:
-            cid = tx.get("customer_id", "")
-            phone = bill_cust_id_to_phone.get(str(cid), "")
-        if phone not in bill_txs_by_phone:
-            bill_txs_by_phone[phone] = []
-        bill_txs_by_phone[phone].append(tx)
+        bill_txs_by_phone = {}
+        bill_txs_by_id = {}
+        tx_rows = await conn.fetch("SELECT * FROM bill_transactions")
+        for tx in tx_rows:
+            tx = dict(tx)
+            phone = tx.get("phone", "")
+            if not phone:
+                cid = tx.get("customer_id", "")
+                phone = bill_cust_id_to_phone.get(str(cid), "")
+            if phone not in bill_txs_by_phone:
+                bill_txs_by_phone[phone] = []
+            bill_txs_by_phone[phone].append(tx)
 
-        bid = tx.get("bill_id")
-        if bid is not None:
-            bid = str(bid)
-            if bid not in bill_txs_by_id:
-                bill_txs_by_id[bid] = []
-            bill_txs_by_id[bid].append(tx)
+            bid = tx.get("bill_id")
+            if bid is not None:
+                bid = str(bid)
+                if bid not in bill_txs_by_id:
+                    bill_txs_by_id[bid] = []
+                bill_txs_by_id[bid].append(tx)
 
-    pipeline = [
-        {"$group": {
-            "_id": "$phone",
-            "records": {"$push": {
-                "source": "$source",
-                "data": "$raw_data",
-                "customer_name": "$customer_name",
-                "customer_total_spent": "$customer_total_spent"
-            }},
-            "names": {"$addToSet": "$customer_name"},
-            "sources": {"$addToSet": "$source"}
-        }},
-        {"$match": {"_id": {"$ne": ""}}}
-    ]
+        groups = await conn.fetch("""
+            SELECT
+                phone,
+                jsonb_agg(jsonb_build_object(
+                    'source', source,
+                    'data', raw_data,
+                    'customer_name', customer_name,
+                    'customer_total_spent', customer_total_spent
+                )) AS records,
+                array_agg(DISTINCT customer_name) FILTER (WHERE customer_name != '') AS names,
+                array_agg(DISTINCT source) AS sources
+            FROM raw_orders
+            WHERE phone != ''
+            GROUP BY phone
+        """)
 
-    groups = await raw_col.aggregate(pipeline).to_list(length=None)
     now = datetime.utcnow()
 
     async with pool.acquire() as conn:
         for group in groups:
-            phone = group["_id"]
-            names = [n for n in group["names"] if n]
+            phone = group["phone"]
+            names_raw = group["names"] or []
+            names = [n for n in names_raw if n]
             name = max(set(names), key=names.count) if names else "Unknown"
-            records = group["records"]
+            records = json.loads(group["records"]) if isinstance(group["records"], str) else group["records"]
 
             email = ""
             username = ""

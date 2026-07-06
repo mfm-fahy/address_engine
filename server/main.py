@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 
-from config.database import connect_db, close_db, get_db
+from config.database import connect_db, close_db
 from config.postgres import get_pool
 from api.data_fetcher import fetch_and_store_all
 from api.comment_fetcher import analyze_and_store_comments, get_tenant_ids
@@ -76,10 +76,9 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health():
-    db = get_db()
-    raw_count = await db["raw_orders"].count_documents({})
     pool = get_pool()
     async with pool.acquire() as conn:
+        raw_count = await conn.fetchval("SELECT COUNT(*) FROM raw_orders")
         profile_count = await conn.fetchval("SELECT COUNT(*) FROM customers")
     return {"status": "ok", "raw_orders": raw_count, "profiles": profile_count, "cycle": cycle}
 

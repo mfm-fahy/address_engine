@@ -1,9 +1,10 @@
 import asyncio
 import httpx
+import json
 import re
 from datetime import datetime
 from config.settings import API_KEYS
-from config.database import get_db
+from config.postgres import get_pool
 
 def normalize_phone(phone: str) -> str:
     if not phone:
@@ -157,20 +158,81 @@ async def fetch_all_paginated(source_name: str, url: str, api_key: str, per_requ
     return all_orders
 
 async def fetch_and_store_all():
-    db = get_db()
-    raw_col = db["raw_orders"]
+    pool = get_pool()
     all_results = {}
 
-    for source_name, config in API_KEYS.items():
-        print(f"Fetching {source_name}...")
-        source_timeout = config.get("timeout", 60)
-        per_request_timeout = config.get("per_request_timeout", 60)
+    async with pool.acquire() as conn:
+        for source_name, config in API_KEYS.items():
+            print(f"Fetching {source_name}...")
+            source_timeout = config.get("timeout", 60)
+            per_request_timeout = config.get("per_request_timeout", 60)
 
-        if source_name == "bill":
-            await raw_col.delete_many({"source": "bill"})
+            if source_name == "bill":
+                await conn.execute("DELETE FROM raw_orders WHERE source = 'bill'")
+                await conn.execute("DELETE FROM bill_transactions")
+                try:
+                    result = await asyncio.wait_for(
+                        fetch_billzzy(config["url"], config["key"], per_request_timeout=per_request_timeout),
+                        timeout=source_timeout
+                    )
+                except asyncio.TimeoutError:
+                    print(f"  -> SKIPPED (timeout)")
+                    all_results[source_name] = -1
+                    continue
+                except Exception as e:
+                    print(f"  -> ERROR: {e}")
+                    all_results[source_name] = -1
+                    continue
+
+                for doc in result["customers"]:
+                    await conn.execute("""
+                        INSERT INTO raw_orders (source, order_id, raw_data, phone, customer_name, customer_id, address, customer_total_spent, fetched_at)
+                        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9)
+                        ON CONFLICT (source, order_id) DO UPDATE SET
+                            raw_data = EXCLUDED.raw_data,
+                            phone = EXCLUDED.phone,
+                            customer_name = EXCLUDED.customer_name,
+                            customer_id = EXCLUDED.customer_id,
+                            address = EXCLUDED.address,
+                            customer_total_spent = EXCLUDED.customer_total_spent,
+                            fetched_at = EXCLUDED.fetched_at
+                    """,
+                        "bill", doc["order_id"], json.dumps(doc["raw_data"], default=str),
+                        doc["phone"], doc["customer_name"], doc.get("customer_id", ""),
+                        doc.get("address", ""), doc.get("customer_total_spent", 0),
+                        datetime.utcnow()
+                    )
+
+                for doc in result["transactions"]:
+                    await conn.execute("""
+                        INSERT INTO bill_transactions (order_id, phone, org_id, org_name, bill_id, bill_no, amount, amount_paid, balance, billing_mode, status, payment_status, date, notes, customer_id, address, raw_transaction, fetched_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18)
+                        ON CONFLICT (order_id) DO UPDATE SET
+                            phone = EXCLUDED.phone, org_id = EXCLUDED.org_id, org_name = EXCLUDED.org_name,
+                            bill_id = EXCLUDED.bill_id, bill_no = EXCLUDED.bill_no, amount = EXCLUDED.amount,
+                            amount_paid = EXCLUDED.amount_paid, balance = EXCLUDED.balance,
+                            billing_mode = EXCLUDED.billing_mode, status = EXCLUDED.status,
+                            payment_status = EXCLUDED.payment_status, date = EXCLUDED.date,
+                            notes = EXCLUDED.notes, customer_id = EXCLUDED.customer_id,
+                            address = EXCLUDED.address, raw_transaction = EXCLUDED.raw_transaction,
+                            fetched_at = EXCLUDED.fetched_at
+                    """,
+                        doc["order_id"], doc["phone"], doc.get("org_id", ""), doc.get("org_name", ""),
+                        doc.get("bill_id"), doc.get("bill_no"), doc.get("amount", 0),
+                        doc.get("amount_paid", 0), doc.get("balance", 0),
+                        doc.get("billing_mode", ""), doc.get("status", ""), doc.get("payment_status", ""),
+                        doc.get("date", ""), doc.get("notes", ""), doc.get("customer_id", ""),
+                        doc.get("address", ""), json.dumps(doc.get("raw_transaction", {}), default=str),
+                        datetime.utcnow()
+                    )
+
+                all_results["bill"] = {"customers": len(result["customers"]), "transactions": len(result["transactions"])}
+                print(f"  -> {len(result['customers'])} customers + {len(result['transactions'])} transactions")
+                continue
+
             try:
-                result = await asyncio.wait_for(
-                    fetch_billzzy(config["url"], config["key"], per_request_timeout=per_request_timeout),
+                orders = await asyncio.wait_for(
+                    fetch_all_paginated(source_name, config["url"], config["key"], per_request_timeout=per_request_timeout),
                     timeout=source_timeout
                 )
             except asyncio.TimeoutError:
@@ -182,94 +244,29 @@ async def fetch_and_store_all():
                 all_results[source_name] = -1
                 continue
 
-            from pymongo import UpdateOne
-            batch = []
-            for doc in result["customers"]:
-                batch.append(UpdateOne(
-                    {"source": "bill", "order_id": doc["order_id"]},
-                    {"$set": {
-                        "source": "bill",
-                        "order_id": doc["order_id"],
-                        "raw_data": doc["raw_data"],
-                        "phone": doc["phone"],
-                        "customer_name": doc["customer_name"],
-                        "customer_id": doc.get("customer_id", ""),
-                        "address": doc.get("address", ""),
-                        "customer_total_spent": doc.get("customer_total_spent", 0),
-                        "fetched_at": datetime.utcnow()
-                    }},
-                    upsert=True
-                ))
-                if len(batch) >= 500:
-                    await raw_col.bulk_write(batch)
-                    batch = []
-            if batch:
-                await raw_col.bulk_write(batch)
-
-            tx_col = db["bill_transactions"]
-            tx_batch = []
-            for doc in result["transactions"]:
-                tx_batch.append(UpdateOne(
-                    {"order_id": doc["order_id"]},
-                    {"$set": {
-                        **doc,
-                        "fetched_at": datetime.utcnow()
-                    }},
-                    upsert=True
-                ))
-                if len(tx_batch) >= 500:
-                    await tx_col.bulk_write(tx_batch)
-                    tx_batch = []
-            if tx_batch:
-                await tx_col.bulk_write(tx_batch)
-
-            all_results["bill"] = {"customers": len(result["customers"]), "transactions": len(result["transactions"])}
-            print(f"  -> {len(result['customers'])} customers + {len(result['transactions'])} transactions")
-            continue
-
-        try:
-            orders = await asyncio.wait_for(
-                fetch_all_paginated(source_name, config["url"], config["key"], per_request_timeout=per_request_timeout),
-                timeout=source_timeout
-            )
-        except asyncio.TimeoutError:
-            print(f"  -> SKIPPED (timeout)")
-            all_results[source_name] = -1
-            continue
-        except Exception as e:
-            print(f"  -> ERROR: {e}")
-            all_results[source_name] = -1
-            continue
-
-        if orders:
-            from pymongo import UpdateOne
-            batch = []
-            for order in orders:
-                phone = extract_phone(source_name, order)
-                normalized = normalize_phone(phone)
-                order_id = order.get("id") or order.get("transactionId") or order.get("_id") or order.get("orderId", "")
-                batch.append(UpdateOne(
-                    {"source": source_name, "order_id": str(order_id)},
-                    {"$set": {
-                        "source": source_name,
-                        "order_id": str(order_id),
-                        "raw_data": order,
-                        "phone": normalized,
-                        "customer_name": extract_name(source_name, order),
-                        "fetched_at": datetime.utcnow()
-                    }},
-                    upsert=True
-                ))
-                if len(batch) >= 500:
-                    await raw_col.bulk_write(batch)
-                    batch = []
-            if batch:
-                await raw_col.bulk_write(batch)
-            all_results[source_name] = len(orders)
-            print(f"  -> {len(orders)} orders stored")
-        else:
-            all_results[source_name] = 0
-            print(f"  -> 0 orders")
+            if orders:
+                for order in orders:
+                    phone = extract_phone(source_name, order)
+                    normalized = normalize_phone(phone)
+                    order_id = order.get("id") or order.get("transactionId") or order.get("_id") or order.get("orderId", "")
+                    await conn.execute("""
+                        INSERT INTO raw_orders (source, order_id, raw_data, phone, customer_name, fetched_at)
+                        VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+                        ON CONFLICT (source, order_id) DO UPDATE SET
+                            raw_data = EXCLUDED.raw_data,
+                            phone = EXCLUDED.phone,
+                            customer_name = EXCLUDED.customer_name,
+                            fetched_at = EXCLUDED.fetched_at
+                    """,
+                        source_name, str(order_id), json.dumps(order, default=str),
+                        normalized, extract_name(source_name, order),
+                        datetime.utcnow()
+                    )
+                all_results[source_name] = len(orders)
+                print(f"  -> {len(orders)} orders stored")
+            else:
+                all_results[source_name] = 0
+                print(f"  -> 0 orders")
 
     return all_results
 

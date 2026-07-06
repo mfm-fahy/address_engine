@@ -1,7 +1,6 @@
 import httpx
 from datetime import datetime
 from config.settings import API_KEYS, SENTIMENT_THRESHOLD
-from config.database import get_db
 from config.postgres import get_pool
 
 try:
@@ -138,9 +137,10 @@ async def analyze_and_store_comments(tenant_id: str):
 
 
 async def get_tenant_ids() -> list:
-    db = get_db()
-    ids = await db["raw_orders"].distinct("raw_data.tenantId")
-    ids = [tid for tid in ids if tid]
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT DISTINCT raw_data->>'tenantId' AS tid FROM raw_orders WHERE raw_data->>'tenantId' IS NOT NULL")
+        ids = [r["tid"] for r in rows if r["tid"]]
     if not ids:
         ids = ["5573c0ef-f0b0-4477-8681-c50e97a48280"]
     return ids
