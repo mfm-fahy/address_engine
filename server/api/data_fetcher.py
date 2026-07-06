@@ -86,9 +86,9 @@ async def fetch_billzzy(url: str, api_key: str, per_request_timeout: int = 120):
                 all_transactions.append({
                     "order_id": f"bill_tx_{org_id}_{tx.get('id', '')}",
                     "phone": tx_phone,
-                    "org_id": org_id,
+                    "org_id": str(org_id) if org_id is not None else "",
                     "org_name": org_name,
-                    "bill_id": tx.get("id"),
+                    "bill_id": str(tx.get("id", "")) if tx.get("id") is not None else "",
                     "bill_no": tx.get("billNo"),
                     "amount": float(tx.get("totalPrice", 0) or 0),
                     "amount_paid": float(tx.get("amountPaid", 0) or 0),
