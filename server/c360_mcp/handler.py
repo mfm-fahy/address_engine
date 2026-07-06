@@ -298,7 +298,7 @@ async def handle_call_tool(name: str, arguments: dict = None):
             if not row:
                 return [TextContent(type="text", text=json.dumps({"error": "Customer not found"}))]
             data = clean_row(dict(row))
-            for col in ("orders", "bills"):
+            for col in ("orders", "bills", "metadata", "stores"):
                 if isinstance(data.get(col), str):
                     data[col] = json.loads(data[col])
         return [TextContent(type="text", text=json.dumps(data, default=str, indent=2))]

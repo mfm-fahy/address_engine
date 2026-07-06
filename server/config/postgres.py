@@ -82,9 +82,15 @@ async def init_schema():
                 last_activity TIMESTAMPTZ,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 metadata JSONB DEFAULT '{}',
+                stores JSONB DEFAULT '[]',
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+
+            DO $$ BEGIN
+                ALTER TABLE customers ADD COLUMN IF NOT EXISTS stores JSONB DEFAULT '[]';
+            EXCEPTION WHEN others THEN null;
+            END $$;
 
             CREATE TABLE IF NOT EXISTS comments (
                 id SERIAL PRIMARY KEY,

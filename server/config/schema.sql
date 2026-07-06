@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS customers (
     last_activity TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     metadata JSONB DEFAULT '{}',
+    stores JSONB DEFAULT '[]',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);

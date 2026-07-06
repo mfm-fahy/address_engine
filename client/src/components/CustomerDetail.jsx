@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShoppingCart, MessageCircle, Receipt, IndianRupee, AlertTriangle, ChevronDown, ChevronUp, Package, MapPin, CreditCard, Truck, Clock } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, MessageCircle, Receipt, IndianRupee, AlertTriangle, ChevronDown, ChevronUp, Package, MapPin, CreditCard, Truck, Clock, Store } from 'lucide-react'
 import { fetchCustomer } from '../api'
 
 function ExpandableSection({ title, count, children, defaultOpen }) {
@@ -296,6 +296,37 @@ export default function CustomerDetail() {
           )}
         </div>
       </div>
+
+      {customer.stores?.length > 0 && (
+        <div className="detail-card stores-section">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Store size={14} /> Stores Purchased From ({customer.stores.length})</h3>
+          <div className="stores-grid">
+            {customer.stores.map((store, i) => (
+              <div key={i} className="store-card">
+                <div className="store-name">{store.name}</div>
+                <div className="store-meta">
+                  <span className={`pill ${store.type === 'bill_org' ? 'pill-bill' : 'pill-retailer'}`}>
+                    {store.type === 'bill_org' ? 'Bill' : 'Retailer'}
+                  </span>
+                  <span className="pill pill-info">
+                    {store.sources?.join(', ')}
+                  </span>
+                </div>
+                <div className="store-stats">
+                  <div className="store-stat">
+                    <ShoppingCart size={12} />
+                    <span>{store.order_count} {store.order_count === 1 ? 'order' : 'orders'}</span>
+                  </div>
+                  <div className="store-stat">
+                    <IndianRupee size={12} />
+                    <span>₹{store.total_spent?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <ExpandableSection title="Orders" count={customer.orders?.length || 0} defaultOpen={true}>

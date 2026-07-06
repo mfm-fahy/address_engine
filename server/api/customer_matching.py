@@ -182,6 +182,36 @@ async def build_customer_profiles():
 
             customer_id = f"CUST{phone}"
 
+            store_map = {}
+            for order in all_orders:
+                order_store_ids = set()
+                for item in order.get("items", []):
+                    sid = item.get("retailerId") or item.get("sku")
+                    if sid:
+                        order_store_ids.add(sid)
+                for sid in order_store_ids:
+                    if sid not in store_map:
+                        store_map[sid] = {"name": sid, "type": "retailer", "order_count": 0, "total_spent": 0.0, "sources": set()}
+                    store_map[sid]["order_count"] += 1
+                    store_map[sid]["sources"].add(order.get("source", ""))
+                    for item in order.get("items", []):
+                        if (item.get("retailerId") or item.get("sku")) == sid:
+                            store_map[sid]["total_spent"] += float(item.get("totalPrice", 0) or 0)
+
+            for bill in all_bills:
+                org = bill.get("org_name", "")
+                if org:
+                    if org not in store_map:
+                        store_map[org] = {"name": org, "type": "bill_org", "order_count": 0, "total_spent": 0.0, "sources": set()}
+                    store_map[org]["order_count"] += 1
+                    store_map[org]["total_spent"] += float(bill.get("amount", 0) or 0)
+                    store_map[org]["sources"].add("bill")
+
+            stores_list = []
+            for entry in store_map.values():
+                entry["sources"] = list(entry["sources"])
+                stores_list.append(entry)
+
             dates = [
                 parse_date(o.get("date")) for o in all_orders if o.get("date")
             ] + [
@@ -194,8 +224,8 @@ async def build_customer_profiles():
                 INSERT INTO customers (
                     customer_id, phone, name, email, username,
                     total_orders, total_bills, total_spent,
-                    orders, bills, sources, last_activity, updated_at, metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb)
+                    orders, bills, sources, last_activity, updated_at, metadata, stores
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb, $15::jsonb)
                 ON CONFLICT (customer_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     email = EXCLUDED.email,
@@ -208,13 +238,14 @@ async def build_customer_profiles():
                     sources = EXCLUDED.sources,
                     last_activity = EXCLUDED.last_activity,
                     updated_at = EXCLUDED.updated_at,
-                    metadata = EXCLUDED.metadata
+                    metadata = EXCLUDED.metadata,
+                    stores = EXCLUDED.stores
             """,
                 customer_id, phone, name, email, username,
                 len(all_orders), len(all_bills), round(total_spent, 2),
                 json_dumps(all_orders), json_dumps(all_bills),
                 list(set(group["sources"])),
-                last_activity, now, json_dumps(metadata)
+                last_activity, now, json_dumps(metadata), json_dumps(stores_list)
             )
 
         total = await conn.fetchval("SELECT COUNT(*) FROM customers")
@@ -229,24 +260,30 @@ async def get_all_customers():
             SELECT
                 customer_id, phone, name, email, username,
                 total_orders, total_bills, total_spent,
-                sources, comment_count, last_activity, updated_at, metadata
+                sources, comment_count, last_activity, updated_at, metadata, stores
             FROM customers
             ORDER BY last_activity DESC NULLS LAST
         """)
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            if isinstance(d.get("stores"), str):
+                d["stores"] = json.loads(d["stores"])
+            result.append(d)
+        return result
 
 
 async def get_customer_by_id(customer_id: str):
     pool = get_pool()
     async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT customer_id, phone, name, email, username, total_orders, total_bills, total_spent, orders, bills, sources, comment_count, last_activity, created_at, updated_at, metadata FROM customers WHERE customer_id = $1 OR phone = $1",
+                "SELECT customer_id, phone, name, email, username, total_orders, total_bills, total_spent, orders, bills, sources, comment_count, last_activity, created_at, updated_at, metadata, stores FROM customers WHERE customer_id = $1 OR phone = $1",
                 customer_id
             )
             if row:
                 result = dict(row)
                 result["_id"] = result.pop("customer_id", "")
-                for col in ("orders", "bills", "metadata"):
+                for col in ("orders", "bills", "metadata", "stores"):
                     if isinstance(result.get(col), str):
                         result[col] = json.loads(result[col])
                 return result
