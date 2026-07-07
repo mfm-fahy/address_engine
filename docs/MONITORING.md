@@ -62,7 +62,6 @@ scrape_configs:
 ### Important
 - Cache hit ratio (target: >80%)
 - Slow requests (tracked by LoggingMiddleware, threshold: 500ms)
-- OpenRouter API latency
 - Recommendation generation throughput
 - MCP server availability
 

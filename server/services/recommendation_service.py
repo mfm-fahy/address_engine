@@ -5,7 +5,7 @@ from repositories.customer_repo import CustomerRepository
 from repositories.recommendation_repo import RecommendationRepository
 from services.feature_engine import FeatureEngine
 from services.rule_engine import RuleEngine
-from services.openrouter_client import generate_ai_recommendation, build_ai_recommendation_dict
+from services.profile_summarizer import get_profile_summarizer
 from services.cache_manager import cache_manager
 from config import settings
 
@@ -24,20 +24,18 @@ class RecommendationService:
             return {"customer_id": customer_id, "error": "not found"}
 
         features = await self._feature_engine.compute_and_store(customer)
+        try:
+            summarizer = get_profile_summarizer()
+            await summarizer.regenerate_summary(customer, customer_id)
+        except Exception as e:
+            print(f"[rec-worker] Summary regeneration failed for {customer_id}: {e}")
+
         rule_recs = self._rule_engine.evaluate(features, customer)
 
         stored_count = 0
         for rec in rule_recs:
             await self._rec_repo.upsert(rec)
             stored_count += 1
-
-        ai_rec = None
-        if self._should_call_ai(features, rule_recs):
-            ai_raw = await generate_ai_recommendation(features)
-            if ai_raw:
-                ai_rec = build_ai_recommendation_dict(ai_raw, customer_id, features)
-                await self._rec_repo.upsert(ai_rec)
-                stored_count += 1
 
         await self._customer_repo.mark_analyzed(customer_id)
         await cache_manager.invalidate_prefix(f"cust:id:{customer_id}")
@@ -48,18 +46,8 @@ class RecommendationService:
             "customer_id": customer_id,
             "features_version": features.get("feature_version", 1),
             "rule_recommendations": len(rule_recs),
-            "ai_recommendation": ai_rec is not None,
             "total_stored": stored_count,
         }
-
-    def _should_call_ai(self, features: dict, rule_recs: list[dict]) -> bool:
-        if not rule_recs:
-            return True
-        if features.get("lifetime_value", 0) >= 100000:
-            return True
-        if features.get("total_orders", 0) >= 20:
-            return True
-        return False
 
     async def get_all(self, status: str = "active", priority: str = None, limit: int = 50) -> list[dict]:
         return await self._rec_repo.get_all(status=status, priority=priority, limit=limit)

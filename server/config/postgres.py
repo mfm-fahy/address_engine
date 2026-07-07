@@ -280,6 +280,16 @@ async def init_schema():
             ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS expected_business_impact TEXT DEFAULT '';
             ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS source_model TEXT DEFAULT '';
         """)
+
+        # Phase 8: AI-Powered Profile Summarization (backward-compatible additions)
+        await conn.execute("""
+            ALTER TABLE customers ADD COLUMN IF NOT EXISTS profile_summary TEXT DEFAULT '';
+        """)
+
+        # Phase 9: Customer address from shipping address
+        await conn.execute("""
+            ALTER TABLE customers ADD COLUMN IF NOT EXISTS address JSONB DEFAULT '{}';
+        """)
         print("PostgreSQL schema initialized (Phase 2 additions applied)")
 
 def get_pool():

@@ -134,8 +134,6 @@ All services have Docker health checks configured:
 - `BILLZZY_API_KEY`
 
 ### Optional
-- `OPENROUTER_API_KEY` - for AI features
-- `OPENROUTER_MODEL` - model name (default: openai/gpt-4o-mini)
 - `AUTH_ENABLED` - enable JWT auth (default: false)
 - `JWT_SECRET_KEY` - JWT signing key
 - `REDIS_PASSWORD` - Redis auth password

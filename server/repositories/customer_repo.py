@@ -14,7 +14,8 @@ class CustomerRepository(BaseRepository):
             SELECT
                 customer_id, phone, name, email, username,
                 total_orders, total_bills, total_spent,
-                sources, comment_count, last_activity, updated_at, metadata, stores
+                sources, comment_count, last_activity, updated_at, metadata, stores,
+                address
             FROM customers
             ORDER BY last_activity DESC NULLS LAST
         """)
@@ -23,6 +24,8 @@ class CustomerRepository(BaseRepository):
             d = dict(r)
             if isinstance(d.get("stores"), str):
                 d["stores"] = json.loads(d["stores"])
+            if isinstance(d.get("address"), str):
+                d["address"] = json.loads(d["address"])
             result.append(d)
         return result
 
@@ -31,7 +34,8 @@ class CustomerRepository(BaseRepository):
             """SELECT customer_id, phone, name, email, username,
                       total_orders, total_bills, total_spent,
                       orders, bills, sources, comment_count,
-                      last_activity, created_at, updated_at, metadata, stores
+                      last_activity, created_at, updated_at, metadata, stores,
+                      profile_summary, address
                FROM customers
                WHERE customer_id = $1 OR phone = $1""",
             customer_id,
@@ -40,7 +44,7 @@ class CustomerRepository(BaseRepository):
             return None
         result = dict(row)
         result["_id"] = result.pop("customer_id", "")
-        for col in ("orders", "bills", "metadata", "stores"):
+        for col in ("orders", "bills", "metadata", "stores", "address"):
             if isinstance(result.get(col), str):
                 result[col] = json.loads(result[col])
         return result
@@ -85,14 +89,15 @@ class CustomerRepository(BaseRepository):
         metadata = json.dumps(data.get("metadata", {}), default=str)
         stores = json.dumps(data.get("stores", []), default=str)
         needs_analysis = data.get("needs_analysis", False)
+        address = json.dumps(data.get("address", {}), default=str)
 
         await self.execute(
             """INSERT INTO customers (
                    customer_id, phone, name, email, username,
                    total_orders, total_bills, total_spent,
                    orders, bills, sources, last_activity, updated_at, metadata, stores,
-                   needs_analysis
-               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb, $15::jsonb, $16)
+                   needs_analysis, address
+               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb)
                ON CONFLICT (customer_id) DO UPDATE SET
                    name = EXCLUDED.name,
                    email = EXCLUDED.email,
@@ -107,12 +112,13 @@ class CustomerRepository(BaseRepository):
                    updated_at = EXCLUDED.updated_at,
                    metadata = EXCLUDED.metadata,
                    stores = EXCLUDED.stores,
-                   needs_analysis = EXCLUDED.needs_analysis""",
+                   needs_analysis = EXCLUDED.needs_analysis,
+                   address = EXCLUDED.address""",
             customer_id, phone, name, email, username,
             total_orders, total_bills, round(total_spent, 2),
             orders, bills, list(sources) if not isinstance(sources, list) else sources,
             last_activity, now, metadata, stores,
-            needs_analysis,
+            needs_analysis, address,
         )
 
     async def set_needs_analysis(self, customer_id: str, value: bool = True) -> None:
@@ -140,12 +146,19 @@ class CustomerRepository(BaseRepository):
         )
         return [dict(r) for r in rows]
 
+    async def update_summary(self, customer_id: str, summary: str) -> None:
+        await self.execute(
+            "UPDATE customers SET profile_summary = $1, updated_at = $2 WHERE customer_id = $3",
+            summary, datetime.utcnow(), customer_id,
+        )
+
     async def get_profile(self, customer_id: str) -> Optional[dict]:
         row = await self.fetchrow(
             """SELECT customer_id, phone, name, email, username,
                       total_orders, total_bills, total_spent,
                       sources, comment_count, last_activity,
-                      created_at, updated_at, metadata, stores
+                      created_at, updated_at, metadata, stores,
+                      address
                FROM customers
                WHERE customer_id = $1 OR phone = $1""",
             customer_id,
@@ -153,7 +166,7 @@ class CustomerRepository(BaseRepository):
         if not row:
             return None
         result = dict(row)
-        for col in ("metadata", "stores"):
+        for col in ("metadata", "stores", "address"):
             if isinstance(result.get(col), str):
                 result[col] = json.loads(result[col])
         return result

@@ -32,15 +32,10 @@ Customer360 is a multi-source customer data aggregation and intelligence platfor
               ┌───────────────┼──────────────┼──────┐
               │               │              │      │
      ┌────────▼──────┐ ┌─────▼─────┐ ┌──────▼──┐ ┌──▼───┐
-     │  Customer     │ │  Feature  │ │  Rule   │ │ AI   │
-     │  Profile      │ │  Engine   │ │  Engine │ │ Rec  │
-     │  Service      │ │           │ │         │ │ Eng  │
-     └───────────────┘ └───────────┘ └─────────┘ └──┬───┘
-                                                     │
-                                            ┌────────▼───────┐
-                                            │  OpenRouter    │
-                                            │  (GPT-4o-mini) │
-                                            └────────────────┘
+      │  Customer     │ │  Feature  │ │  Rule   │
+      │  Profile      │ │  Engine   │ │  Engine │
+      │  Service      │ │           │ │         │
+      └───────────────┘ └───────────┘ └─────────┘
                               │
        ┌──────────────────────┼──────────────────────────┐
        │                      │                          │
@@ -82,10 +77,8 @@ Customer360 is a multi-source customer data aggregation and intelligence platfor
 - Feature computation and recommendation generation
 
 ### AI Layer (`server/ai/`)
-- OpenRouter client for GPT-4o-mini access
 - MCP client for tool discovery and execution
 - Agent orchestration for multi-turn conversations
-- Business insights generation
 
 ### MCP Server (`server/c360_mcp/`)
 - Model Context Protocol implementation
@@ -119,5 +112,4 @@ Customer360 is a multi-source customer data aggregation and intelligence platfor
 - **PostgreSQL** is the single source of truth
 - **Redis** is used only for caching (TTL-based)
 - **MCP** is the only interface for LLM tool access
-- **OpenRouter** provides AI model access (not direct API calls)
 - **Background scheduler** runs data fetch, profile building, and recommendation processing on cycles

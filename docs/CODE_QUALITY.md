@@ -47,7 +47,6 @@ Comprehensive review of the entire `server/` Python codebase (60+ source files) 
 #### Naming Inconsistencies
 | File | Issue |
 |------|-------|
-| `server/services/openrouter_client.py` | Module uses snake_case but `OpenRouter` has mixed case in name |
 | `server/services/*.py` | Mix of `service` suffix (order_service) and no suffix (feature_engine, rule_engine) |
 | `server/repositories/*.py` | Mix of `_repo`, `_repository` suffixes |
 

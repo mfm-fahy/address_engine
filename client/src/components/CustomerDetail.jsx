@@ -4,9 +4,9 @@ import {
   ArrowLeft, ShoppingCart, MessageCircle, IndianRupee,
   AlertTriangle, ChevronDown, ChevronUp, Package, MapPin,
   CreditCard, Truck, Clock, Store, Phone, Mail, User,
-  Calendar, Shield, BadgePercent, Activity
+  Calendar, Shield, BadgePercent, Activity, RefreshCw, Sparkles
 } from 'lucide-react'
-import { fetchCustomer } from '../api'
+import { fetchCustomer, fetchCustomerSummary } from '../api'
 import { SkeletonDetail, EmptyState } from './ui'
 
 function ExpandableSection({ title, count, children, defaultOpen }) {
@@ -50,12 +50,12 @@ function AddressBlock({ label, address }) {
   if (!address || !address.addressLine1) return null
   return (
     <div className="address-block">
-      <div className="address-label">{label}</div>
-      <div>{address.name}{address.phone ? ` (${address.phone})` : ''}</div>
+      {label && <div className="address-label">{label}</div>}
+      {address.name && <div>{address.name}{address.phone ? ` (${address.phone})` : ''}</div>}
       <div>{address.addressLine1}</div>
       {address.addressLine2 && <div>{address.addressLine2}</div>}
       <div>{[address.city, address.state, address.pincode].filter(Boolean).join(', ')}</div>
-      <div>{address.country}</div>
+      {address.country && <div>{address.country}</div>}
     </div>
   )
 }
@@ -204,12 +204,17 @@ export default function CustomerDetail() {
   const navigate = useNavigate()
   const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [summary, setSummary] = useState('')
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await fetchCustomer(id)
         setCustomer(data)
+        if (data.profile_summary) {
+          setSummary(data.profile_summary)
+        }
       } catch (e) {
         console.error('Failed to load customer', e)
       } finally {
@@ -217,6 +222,18 @@ export default function CustomerDetail() {
       }
     }
     load()
+  }, [id])
+
+  const handleRefreshSummary = useCallback(async () => {
+    setSummaryLoading(true)
+    try {
+      const result = await fetchCustomerSummary(id, true)
+      setSummary(result.summary)
+    } catch (e) {
+      console.error('Failed to refresh summary', e)
+    } finally {
+      setSummaryLoading(false)
+    }
   }, [id])
 
   if (loading) return <SkeletonDetail />
@@ -247,16 +264,10 @@ export default function CustomerDetail() {
             <span className="badge badge-vip" style={{ fontSize: 12, padding: '4px 12px' }}>VIP</span>
           )}
         </div>
-        {customer.metadata?.flatNo && (
-          <div className="meta" style={{ fontSize: 13, marginTop: 4 }}>
-            <MapPin size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            {[
-              customer.metadata.flatNo,
-              customer.metadata.street,
-              customer.metadata.district,
-              customer.metadata.state,
-              customer.metadata.pincode
-            ].filter(Boolean).join(', ')}
+        {customer.address?.addressLine1 && (
+          <div className="detail-row" style={{ marginTop: 8 }}>
+            <MapPin size={14} />
+            <AddressBlock label="" address={customer.address} />
           </div>
         )}
         <div className="badges">
@@ -312,6 +323,29 @@ export default function CustomerDetail() {
             ))
           )}
         </div>
+      </div>
+
+      <div className="detail-card-section summary-section">
+        <div className="summary-header">
+          <h3><Sparkles size={14} /> AI Profile Summary</h3>
+          <button className="btn btn-ghost btn-sm" onClick={handleRefreshSummary} disabled={summaryLoading}>
+            <RefreshCw size={14} className={summaryLoading ? 'spin' : ''} />
+            {summaryLoading ? 'Generating...' : 'Refresh'}
+          </button>
+        </div>
+        {summary ? (
+          <p className="summary-text">{summary}</p>
+        ) : summaryLoading ? (
+          <div className="summary-loading">
+            <div className="skeleton-line" style={{ width: '100%' }} />
+            <div className="skeleton-line" style={{ width: '85%' }} />
+            <div className="skeleton-line" style={{ width: '60%' }} />
+          </div>
+        ) : (
+          <div className="detail-muted" style={{ textAlign: 'center', padding: 16 }}>
+            No summary available. Click refresh to generate one.
+          </div>
+        )}
       </div>
 
       {customer.stores?.length > 0 && (

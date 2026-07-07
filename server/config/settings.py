@@ -53,10 +53,6 @@ SEARCH_TTL = int(os.getenv("CACHE_SEARCH_TTL", "120"))
 ALERTS_TTL = int(os.getenv("CACHE_ALERTS_TTL", "60"))
 RECOMMENDATION_TTL = int(os.getenv("CACHE_RECOMMENDATION_TTL", "300"))
 
-# OpenRouter configuration
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-
 # Background worker configuration
 WORKER_BATCH_SIZE = int(os.getenv("WORKER_BATCH_SIZE", "10"))
 WORKER_CYCLE_INTERVAL = int(os.getenv("WORKER_CYCLE_INTERVAL", "4"))  # cycles between recommendation runs

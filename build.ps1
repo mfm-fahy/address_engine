@@ -1,7 +1,7 @@
 param(
   [string]$Tag = "latest",
   [string]$Registry = "mfmfahy",
-  [string]$Platforms = "linux/amd64,linux/arm64",
+  [string]$Platforms = "linux/amd64",
   [switch]$Push
 )
 

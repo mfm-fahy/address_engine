@@ -18,6 +18,7 @@ from services.customer_service import CustomerService
 from services.alert_service import AlertService
 from services.recommendation_service import RecommendationService
 from services.dashboard_service import DashboardService
+from services.profile_summarizer import get_profile_summarizer
 from c360_mcp.routes import router as mcp_router
 from c360_mcp.handler import get_pool as mcp_get_pool, close_pool as mcp_close_pool
 from ai.router import ai_router, business_router
@@ -83,6 +84,15 @@ async def background_fetch_loop():
                     print(f"[scheduler] Recommendations done in {rec_elapsed:.2f}s: {batch_result}")
                 else:
                     print(f"[scheduler] No pending customers for recommendations")
+
+            if cycle % 10 == 0:
+                t4 = time.time()
+                from services.profile_summarizer import get_profile_summarizer
+                summarizer = get_profile_summarizer()
+                summary_count = await summarizer.generate_for_all()
+                summary_elapsed = time.time() - t4
+                if summary_count:
+                    print(f"[scheduler] Generated {summary_count} summary(ies) in {summary_elapsed:.2f}s")
 
             cycle_elapsed = time.time() - t0
             print(f"[scheduler] Cycle {cycle} complete in {cycle_elapsed:.2f}s")
@@ -190,6 +200,7 @@ async def trigger_comment_analysis():
 
 @app.post("/api/refresh-all")
 async def refresh_all():
+    from services.profile_summarizer import get_profile_summarizer
     fetch_result = await _order_service.fetch_and_store_all()
     profile_result = await _profile_service.build_profiles()
     tenant_ids = await _comment_service.get_tenant_ids()
@@ -197,11 +208,22 @@ async def refresh_all():
     for tid in tenant_ids:
         r = await _comment_service.analyze_and_store(tid)
         comment_results.append(r)
+    summarizer = get_profile_summarizer()
+    summary_count = await summarizer.generate_for_all()
     return {
         "fetch": fetch_result,
         "profiles": profile_result,
-        "comments": comment_results
+        "comments": comment_results,
+        "summaries_generated": summary_count,
     }
+
+
+@app.post("/api/summarize-all")
+async def trigger_summarize_all():
+    from services.profile_summarizer import get_profile_summarizer
+    summarizer = get_profile_summarizer()
+    count = await summarizer.generate_for_all()
+    return {"message": f"Summaries generated for {count} customer(s)", "count": count}
 
 
 @app.get("/api/customers")
@@ -252,6 +274,19 @@ async def customer_analytics(customer_id: str):
     if not analytics:
         raise HTTPException(status_code=404, detail="Customer not found")
     return ok(analytics)
+
+
+@app.get("/api/customers/{customer_id}/summary")
+async def customer_summary(customer_id: str, refresh: bool = False):
+    customer = await _customer_service.get_by_id(customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    summarizer = get_profile_summarizer()
+    if refresh:
+        summary = await summarizer.regenerate_summary(customer, customer_id)
+    else:
+        summary = await summarizer.generate_summary(customer, customer_id)
+    return {"customer_id": customer_id, "summary": summary}
 
 
 @app.get("/api/alerts")

@@ -7,12 +7,55 @@ from repositories.customer_repo import CustomerRepository
 from pipeline.event_detector import detect_profile_changes
 from pipeline.normalizers import normalize_date
 from services.cache_manager import cache_manager
+from services.profile_summarizer import get_profile_summarizer
 
 PAID_STATUSES = {
     "paid", "shipped", "delivered", "completed", "confirmed", "processing",
     "tracked", "shipping_selected", "printed", "packed",
     "created", "dispatched"
 }
+
+
+def _normalize_shipping_address(sa: dict) -> dict:
+    if not sa:
+        return {}
+    if sa.get("addressLine1"):
+        return {
+            "name": sa.get("name", ""),
+            "phone": sa.get("phone", ""),
+            "addressLine1": sa.get("addressLine1", ""),
+            "addressLine2": sa.get("addressLine2", ""),
+            "city": sa.get("city", ""),
+            "state": sa.get("state", ""),
+            "pincode": sa.get("pincode", ""),
+            "country": sa.get("country", ""),
+        }
+    if sa.get("street"):
+        return {
+            "name": sa.get("name", ""),
+            "phone": sa.get("phone", ""),
+            "addressLine1": sa.get("street", ""),
+            "addressLine2": "",
+            "city": sa.get("city", ""),
+            "state": sa.get("state", ""),
+            "pincode": sa.get("zipCode", ""),
+            "country": sa.get("country", ""),
+        }
+    return {}
+
+
+def _pick_customer_address(orders: list) -> dict:
+    candidates = []
+    for o in orders:
+        raw = o.get("raw", {})
+        sa = raw.get("shippingAddress") or {}
+        norm = _normalize_shipping_address(sa)
+        if norm.get("addressLine1"):
+            candidates.append((o.get("date", ""), norm))
+    if not candidates:
+        return {}
+    candidates.sort(key=lambda x: x[0] or "", reverse=True)
+    return candidates[0][1]
 
 
 class CustomerProfileService:
@@ -215,6 +258,8 @@ class CustomerProfileService:
             dates = [d for d in dates if d is not None]
             last_activity = max(dates) if dates else now
 
+            address = _pick_customer_address(all_orders)
+
             new_profile = {
                 "customer_id": customer_id,
                 "phone": phone,
@@ -231,6 +276,7 @@ class CustomerProfileService:
                 "updated_at": now,
                 "metadata": metadata,
                 "stores": stores_list,
+                "address": address,
             }
 
             old_raw = await self._customer_repo.get_by_id_raw(customer_id)
@@ -242,6 +288,13 @@ class CustomerProfileService:
 
             await self._customer_repo.upsert(new_profile)
             await cache_manager.invalidate(f"cust:id:{customer_id}")
+
+            if detection["needs_analysis"]:
+                try:
+                    summarizer = get_profile_summarizer()
+                    await summarizer.regenerate_summary(new_profile, customer_id)
+                except Exception as e:
+                    print(f"[profile-builder] Summary generation failed for {customer_id}: {e}")
 
         await cache_manager.invalidate("cust:list")
         await cache_manager.invalidate("dash:stats")
