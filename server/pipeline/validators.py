@@ -44,7 +44,7 @@ def validate_order(order: dict, source: str) -> list[str]:
 
 def validate_bill_customer(cust: dict) -> list[str]:
     errors = []
-    cid = cust.get("id")
+    cid = cust.get("customer_id") or cust.get("id")
     if not cid:
         errors.append("Missing customer id in bill customer record")
     phone = normalize_phone(str(cust.get("phone", "")))
@@ -57,17 +57,18 @@ def validate_bill_customer(cust: dict) -> list[str]:
 
 def validate_bill_tx(tx: dict) -> list[str]:
     errors = []
-    tx_id = tx.get("id")
+    tx_id = tx.get("order_id") or tx.get("id") or tx.get("bill_id")
     if not tx_id:
         errors.append("Missing id in bill transaction")
     phone = normalize_phone(str(tx.get("phone", "")))
     if not phone:
-        cid = tx.get("customerId") or tx.get("customer_id") or ""
+        cid = tx.get("customer_id") or tx.get("customerId") or ""
         if not cid:
             errors.append(f"Missing phone and customerId for bill tx id={tx_id}")
     try:
-        if tx.get("totalPrice"):
-            float(tx.get("totalPrice", 0))
+        amount = tx.get("amount") or tx.get("totalPrice")
+        if amount:
+            float(amount)
     except (ValueError, TypeError):
         errors.append(f"Invalid amount for bill tx id={tx_id}")
     return errors
