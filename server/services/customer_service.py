@@ -75,6 +75,20 @@ class CustomerService:
             lambda: self._repo.get_analytics(customer_id),
         )
 
+    async def get_form_data(self, phone: str) -> Optional[dict]:
+        customer = await self._repo.get_by_id(phone)
+        if not customer:
+            return None
+        return {
+            "customer_id": customer.get("customer_id"),
+            "phone": customer.get("phone"),
+            "name": customer.get("name", ""),
+            "email": customer.get("email", ""),
+            "username": customer.get("username", ""),
+            "address": customer.get("address", {}),
+            "stores": customer.get("stores", []),
+        }
+
     async def invalidate_cache(self, customer_id: str = None) -> None:
         await cache_manager.invalidate_prefix("cust:list")
         if customer_id:

@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -9,7 +9,7 @@ from typing import Optional
 
 from config.database import connect_db, close_db
 from config.redis import redis_client
-from config.settings import AUTH_ENABLED, JWT_SECRET_KEY, JWT_ACCESS_TOKEN_EXPIRE_MINUTES, JWT_REFRESH_TOKEN_EXPIRE_DAYS
+from config.settings import AUTH_ENABLED, JWT_SECRET_KEY, JWT_ACCESS_TOKEN_EXPIRE_MINUTES, JWT_REFRESH_TOKEN_EXPIRE_DAYS, API_KEY
 from services.cache_manager import cache_manager
 from services.order_service import OrderService
 from services.customer_profile_service import CustomerProfileService
@@ -19,6 +19,7 @@ from services.alert_service import AlertService
 from services.recommendation_service import RecommendationService
 from services.dashboard_service import DashboardService
 from services.profile_summarizer import get_profile_summarizer
+from services.section_summarizer import get_section_summarizer
 from c360_mcp.routes import router as mcp_router
 from c360_mcp.handler import get_pool as mcp_get_pool, close_pool as mcp_close_pool
 from ai.router import ai_router, business_router
@@ -26,6 +27,7 @@ from api_helpers import ok, paginated, error, LoggingMiddleware
 from auth.jwt import configure_jwt
 from auth.dependencies import configure_auth
 from auth.rate_limiter import configure_rate_limiter
+from auth.api_key import configure_api_key, verify_api_key
 from auth.router import router as auth_router
 from monitoring import metrics, log_event
 
@@ -120,6 +122,8 @@ async def lifespan(app: FastAPI):
     configure_auth(AUTH_ENABLED)
     # Configure rate limiting (default: 100 requests per 60s window)
     configure_rate_limiter(AUTH_ENABLED, requests=100, window_seconds=60)
+    # Configure API key for external app auth
+    configure_api_key(API_KEY)
     from auth.user_store import load_users
     load_users()
 
@@ -287,6 +291,24 @@ async def customer_summary(customer_id: str, refresh: bool = False):
     else:
         summary = await summarizer.generate_summary(customer, customer_id)
     return {"customer_id": customer_id, "summary": summary}
+
+
+@app.get("/api/customer-form/{phone}")
+async def customer_form_data(phone: str, _: None = Depends(verify_api_key)):
+    data = await _customer_service.get_form_data(phone)
+    if not data:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return ok(data)
+
+
+@app.get("/api/customers/{customer_id}/section-summaries")
+async def customer_section_summaries(customer_id: str):
+    summarizer = get_section_summarizer()
+    try:
+        result = await summarizer.get_section_summaries(customer_id)
+        return ok(result)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Customer not found")
 
 
 @app.get("/api/alerts")
