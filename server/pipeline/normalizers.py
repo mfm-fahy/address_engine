@@ -62,6 +62,9 @@ def extract_source_phone(source: str, order: dict) -> str:
         if not phone:
             sa = order.get("shippingAddress", {})
             phone = sa.get("phone", "")
+        if not phone:
+            ba = order.get("billingAddress", {})
+            phone = ba.get("phone", "")
         return phone
     return ""
 

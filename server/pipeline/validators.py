@@ -30,6 +30,9 @@ def validate_order(order: dict, source: str) -> list[str]:
         if not phone_raw:
             sa = order.get("shippingAddress", {})
             phone_raw = sa.get("phone", "")
+        if not phone_raw:
+            ba = order.get("billingAddress", {})
+            phone_raw = ba.get("phone", "")
     else:
         phone_raw = order.get("customerPhone", "") or order.get("customerDetails", {}).get("phone", "")
     phone = normalize_phone(phone_raw)
