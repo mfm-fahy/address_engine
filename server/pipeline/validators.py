@@ -20,24 +20,29 @@ def validate_order(order: dict, source: str) -> list[str]:
         or order.get("orderId")
         or ""
     )
-    if not order_id:
+    if not order_id and source != "f3":
         errors.append(f"Missing order_id for source={source}")
-    phone_raw = order.get("customerPhone", "") or order.get("customerDetails", {}).get("phone", "")
+    phone_raw = ""
     if source == "instaxbot":
         phone_raw = order.get("customer", {}).get("phone", "")
     elif source == "f3":
-        cust = order.get("customerDetails", {})
-        phone_raw = cust.get("phone", order.get("customerPhone", ""))
+        phone_raw = order.get("customerPhone", "")
+        if not phone_raw:
+            sa = order.get("shippingAddress", {})
+            phone_raw = sa.get("phone", "")
+    else:
+        phone_raw = order.get("customerPhone", "") or order.get("customerDetails", {}).get("phone", "")
     phone = normalize_phone(phone_raw)
     if phone and not _is_valid_phone(phone):
         errors.append(f"Invalid phone '{phone}' for order_id={order_id}, source={source}")
-    for field in ("totalAmount", "total", "amount"):
+    for field in ("orderValue", "totalAmount", "total", "amount"):
         val = order.get(field)
         if val is not None:
             break
     else:
         if source not in ("gowhats",):
-            if order.get("status", "").lower() not in ("pending", "cancelled"):
+            status = (order.get("status", "") or "").lower()
+            if source == "f3" or status not in ("pending", "cancelled"):
                 errors.append(f"Missing amount field for order_id={order_id}, source={source}")
     return errors
 

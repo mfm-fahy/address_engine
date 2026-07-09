@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 
 from config.settings import API_KEYS
 from repositories.order_repo import RawOrderRepository
@@ -78,6 +79,9 @@ class OrderService:
 
             phone = normalize_phone(extract_source_phone(source_name, order))
             order_id = order.get("id") or order.get("transactionId") or order.get("_id") or order.get("orderId", "")
+            if not order_id and source_name == "f3":
+                raw = f"{order.get('orderDate','')}_{order.get('orderValue','')}_{order.get('customerName','')}_{phone}"
+                order_id = f"f3_{hashlib.md5(raw.encode()).hexdigest()[:12]}"
 
             is_dup = await self._dedup.is_duplicate_order(source_name, str(order_id))
             if is_dup:

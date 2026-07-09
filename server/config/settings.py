@@ -19,7 +19,7 @@ API_KEYS = {
         "per_request_timeout": 60
     },
     "f3": {
-        "url": "https://f3engine.com/api/external/orders",
+        "url": "https://f3engine.com/api/external/global-customers",
         "key": os.getenv("F3_API_KEY", ""),
         "timeout": 60,
         "per_request_timeout": 60

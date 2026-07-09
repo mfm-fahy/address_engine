@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import datetime
 
@@ -152,22 +153,45 @@ class CustomerProfileService:
                         total_spent += float(data.get("totalAmount", 0) or 0)
 
                 elif source == "f3":
-                    cust = data.get("customerDetails", {})
-                    if cust.get("email"):
-                        email = cust["email"]
                     if data.get("customerEmail"):
                         email = data["customerEmail"]
-                    all_orders.append({
-                        "source": source,
-                        "order_id": data.get("orderId", data.get("orderNumber", data.get("_id", ""))),
-                        "amount": data.get("totalAmount", data.get("total", data.get("amount", 0))),
-                        "status": data.get("status", ""),
-                        "items": data.get("items", []),
-                        "date": data.get("createdAt", data.get("orderDate", "")),
-                        "raw": data
-                    })
-                    if data.get("status", "").lower() in PAID_STATUSES:
-                        total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
+                    elif data.get("customerDetails", {}).get("email"):
+                        email = data["customerDetails"]["email"]
+                    is_new_format = "customerName" in data and "customerDetails" not in data
+                    if is_new_format:
+                        order_id = data.get("orderId") or data.get("orderNumber") or data.get("_id", "")
+                        if not order_id:
+                            raw = f"{data.get('orderDate','')}_{data.get('orderValue','')}_{data.get('customerName','')}"
+                            order_id = f"f3_{hashlib.md5(raw.encode()).hexdigest()[:12]}"
+                        status = data.get("status", "")
+                        all_orders.append({
+                            "source": source,
+                            "order_id": order_id,
+                            "amount": data.get("orderValue", 0),
+                            "status": status,
+                            "items": data.get("products", []),
+                            "date": data.get("orderDate", ""),
+                            "raw": data
+                        })
+                        if not status or status.lower() in PAID_STATUSES:
+                            total_spent += float(data.get("orderValue", 0) or 0)
+                    else:
+                        cust = data.get("customerDetails", {})
+                        if cust.get("email"):
+                            email = cust["email"]
+                        if data.get("customerEmail"):
+                            email = data["customerEmail"]
+                        all_orders.append({
+                            "source": source,
+                            "order_id": data.get("orderId", data.get("orderNumber", data.get("_id", ""))),
+                            "amount": data.get("totalAmount", data.get("total", data.get("amount", 0))),
+                            "status": data.get("status", ""),
+                            "items": data.get("items", []),
+                            "date": data.get("createdAt", data.get("orderDate", "")),
+                            "raw": data
+                        })
+                        if data.get("status", "").lower() in PAID_STATUSES:
+                            total_spent += float(data.get("totalAmount", data.get("total", data.get("amount", 0))) or 0)
 
                 elif source == "bill":
                     cust = data.get("_bill_customer", {})
