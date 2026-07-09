@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 
 from config.settings import API_KEYS
 from repositories.order_repo import RawOrderRepository
@@ -69,9 +70,14 @@ class OrderService:
             logger.log("0 orders fetched")
             return result
 
+        existing_f3_ids = set()
         if source_name == "f3":
-            await self._order_repo.delete_by_source("f3")
-            logger.log("Deleted old F3 records before fresh insert")
+            rows = await self._order_repo.fetch(
+                "SELECT order_id, raw_data FROM raw_orders WHERE source = 'f3'"
+            )
+            existing_f3_ids = {str(r["order_id"]) for r in rows}
+            existing_f3_map = {str(r["order_id"]): r["raw_data"] for r in rows}
+            logger.log(f"Existing F3 records in DB: {len(existing_f3_ids)}")
 
         for order in orders:
             validation_errors = validate_order(order, source_name)
@@ -87,19 +93,35 @@ class OrderService:
                 raw = f"{order.get('orderDate','')}_{order.get('orderValue','')}_{order.get('customerName','')}_{phone}"
                 order_id = f"f3_{hashlib.md5(raw.encode()).hexdigest()[:12]}"
 
-            if source_name != "f3":
+            if source_name == "f3":
+                oid = str(order_id)
+                if oid in existing_f3_ids:
+                    old_raw = existing_f3_map.get(oid)
+                    if old_raw is not None:
+                        old_dict = dict(old_raw) if hasattr(old_raw, "items") else old_raw
+                        if json.dumps(order, sort_keys=True, default=str) == json.dumps(old_dict, sort_keys=True, default=str):
+                            result.duplicate_count += 1
+                            continue
+                    result.updated_count += 1
+                else:
+                    result.inserted_count += 1
+                await self._order_repo.upsert_generic_order(
+                    source_name, order_id, order, phone,
+                    extract_source_name(source_name, order),
+                )
+            else:
                 is_dup = await self._dedup.is_duplicate_order(source_name, str(order_id))
                 if is_dup:
                     result.duplicate_count += 1
                     continue
 
-            await self._order_repo.upsert_generic_order(
-                source_name, order_id, order, phone,
-                extract_source_name(source_name, order),
-            )
-            result.inserted_count += 1
+                await self._order_repo.upsert_generic_order(
+                    source_name, order_id, order, phone,
+                    extract_source_name(source_name, order),
+                )
+                result.inserted_count += 1
 
-        logger.log(f"fetched={result.total_fetched} valid={result.valid_count} inserted={result.inserted_count} dupes={result.duplicate_count}")
+        logger.log(f"fetched={result.total_fetched} valid={result.valid_count} inserted={result.inserted_count} updated={result.updated_count} dupes={result.duplicate_count}")
         return result
 
     async def _process_bill(self, source_name: str, config: dict, source_timeout: int,

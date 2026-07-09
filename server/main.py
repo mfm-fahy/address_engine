@@ -12,6 +12,7 @@ from config.redis import redis_client
 from config.settings import AUTH_ENABLED, JWT_SECRET_KEY, JWT_ACCESS_TOKEN_EXPIRE_MINUTES, JWT_REFRESH_TOKEN_EXPIRE_DAYS, API_KEY
 from services.cache_manager import cache_manager
 from services.order_service import OrderService
+from services.f3db_loader import F3DbLoader
 from services.customer_profile_service import CustomerProfileService
 from services.comment_service import CommentService
 from services.customer_service import CustomerService
@@ -207,6 +208,19 @@ async def refresh_all():
         "comments": comment_result,
         "summaries_generated": summary_count,
     }
+
+
+@app.post("/api/f3db/load")
+async def trigger_f3db_load():
+    loader = F3DbLoader()
+    result = await loader.load_all_files()
+    return {"message": "F3DB load completed", "result": {
+        "files_processed": result.total_fetched,
+        "valid": result.valid_count,
+        "inserted": result.inserted_count,
+        "duplicates": result.duplicate_count,
+        "errors": result.validation_errors[:20],
+    }}
 
 
 @app.post("/api/summarize-all")
