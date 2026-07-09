@@ -69,6 +69,10 @@ class OrderService:
             logger.log("0 orders fetched")
             return result
 
+        if source_name == "f3":
+            await self._order_repo.delete_by_source("f3")
+            logger.log("Deleted old F3 records before fresh insert")
+
         for order in orders:
             validation_errors = validate_order(order, source_name)
             if validation_errors:
@@ -83,10 +87,11 @@ class OrderService:
                 raw = f"{order.get('orderDate','')}_{order.get('orderValue','')}_{order.get('customerName','')}_{phone}"
                 order_id = f"f3_{hashlib.md5(raw.encode()).hexdigest()[:12]}"
 
-            is_dup = await self._dedup.is_duplicate_order(source_name, str(order_id))
-            if is_dup:
-                result.duplicate_count += 1
-                continue
+            if source_name != "f3":
+                is_dup = await self._dedup.is_duplicate_order(source_name, str(order_id))
+                if is_dup:
+                    result.duplicate_count += 1
+                    continue
 
             await self._order_repo.upsert_generic_order(
                 source_name, order_id, order, phone,

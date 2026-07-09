@@ -21,8 +21,8 @@ API_KEYS = {
     "f3": {
         "url": "https://f3engine.com/api/external/global-customers",
         "key": os.getenv("F3_API_KEY", ""),
-        "timeout": 60,
-        "per_request_timeout": 60
+        "timeout": 300,
+        "per_request_timeout": 300
     },
     "bill": {
         "url": "https://billzzy.com/api/admin/all-data",
