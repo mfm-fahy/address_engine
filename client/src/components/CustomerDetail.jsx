@@ -4,9 +4,9 @@ import {
   ArrowLeft, ShoppingCart, MessageCircle, IndianRupee,
   AlertTriangle, ChevronDown, ChevronUp, Package, MapPin,
   CreditCard, Truck, Clock, Store, Phone, Mail, User,
-  Calendar, Shield, BadgePercent, Activity, RefreshCw, Sparkles
+  Calendar, Shield, BadgePercent, Activity, RefreshCw, Sparkles, ShieldAlert
 } from 'lucide-react'
-import { fetchCustomer, fetchCustomerSummary } from '../api'
+import { fetchCustomer, fetchCustomerSummary, fetchCustomerBadComments } from '../api'
 import { SkeletonDetail, EmptyState } from './ui'
 
 function ExpandableSection({ title, count, children, defaultOpen }) {
@@ -206,6 +206,8 @@ export default function CustomerDetail() {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState('')
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [badComments, setBadComments] = useState([])
+  const [badCommentsLoading, setBadCommentsLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -214,6 +216,15 @@ export default function CustomerDetail() {
         setCustomer(data)
         if (data.profile_summary) {
           setSummary(data.profile_summary)
+        }
+        setBadCommentsLoading(true)
+        try {
+          const bc = await fetchCustomerBadComments(id)
+          setBadComments(bc.bad_comments || [])
+        } catch (e) {
+          console.error('Failed to load bad comments', e)
+        } finally {
+          setBadCommentsLoading(false)
         }
       } catch (e) {
         console.error('Failed to load customer', e)
@@ -395,6 +406,63 @@ export default function CustomerDetail() {
             customer.bills.map((b, i) => <BillDetailCard key={i} bill={b} />)
           )}
         </ExpandableSection>
+
+        <ExpandableSection title="Comments" count={customer.comments?.length || 0} defaultOpen={true}>
+          {customer.comments?.length === 0 ? (
+            <div className="detail-muted" style={{ textAlign: 'center', padding: 12 }}>No comments yet</div>
+          ) : (
+            customer.comments.map((c, i) => (
+              <div key={i} className={`comment-card ${c.is_negative ? 'comment-negative' : ''} ${c.triggered_rule === 'bad_command' ? 'comment-bad-command' : ''}`}>
+                <div className="comment-header">
+                  <span className="comment-username">@{c.username}</span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {c.triggered_rule === 'bad_command' && (
+                      <span className="pill pill-bad-command">
+                        <ShieldAlert size={10} /> Bad Command
+                      </span>
+                    )}
+                    <span className={`pill ${c.is_negative ? 'pill-danger' : c.sentiment_label === 'positive' ? 'pill-success' : 'pill-info'}`}>
+                      {c.sentiment_label}
+                    </span>
+                  </div>
+                </div>
+                <div className="comment-text">{c.text}</div>
+                <div className="comment-meta">
+                  <MessageCircle size={12} />
+                  <span>{new Date(c.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </ExpandableSection>
+
+        {badComments.length > 0 && (
+          <div className="detail-card-section bad-comments-section">
+            <div className="bad-comments-banner">
+              <ShieldAlert size={16} />
+              <span>Bad Commands Detected ({badComments.length})</span>
+            </div>
+            <div className="bad-comments-alert">
+              <AlertTriangle size={14} />
+              <span>These comments were flagged by the bad commands detection system</span>
+            </div>
+            {badComments.map((c, i) => (
+              <div key={i} className="comment-card comment-negative comment-bad-command">
+                <div className="comment-header">
+                  <span className="comment-username">@{c.username}</span>
+                  <span className="pill pill-bad-command">
+                    <ShieldAlert size={10} /> Bad Command
+                  </span>
+                </div>
+                <div className="comment-text">{c.text}</div>
+                <div className="comment-meta">
+                  <MessageCircle size={12} />
+                  <span>{new Date(c.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {allActivity.length > 0 && (
           <ExpandableSection title="Activity Timeline" count={allActivity.length}>

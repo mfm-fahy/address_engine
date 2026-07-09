@@ -70,11 +70,9 @@ async def background_fetch_loop():
             if cycle % 6 == 0:
                 t2 = time.time()
                 print("[scheduler] Analyzing comments...")
-                tenant_ids = await _comment_service.get_tenant_ids()
-                for tid in tenant_ids:
-                    await _comment_service.analyze_and_store(tid)
+                result = await _comment_service.fetch_and_store()
                 comment_elapsed = time.time() - t2
-                print(f"[scheduler] Comments done in {comment_elapsed:.2f}s")
+                print(f"[scheduler] Comments done in {comment_elapsed:.2f}s: {result}")
 
             if cycle % 4 == 0:
                 t3 = time.time()
@@ -191,15 +189,8 @@ async def trigger_profiles():
 
 @app.post("/api/analyze-comments")
 async def trigger_comment_analysis():
-    tenant_ids = await _comment_service.get_tenant_ids()
-    all_results = []
-    for tid in tenant_ids:
-        result = await _comment_service.analyze_and_store(tid)
-        all_results.append({"tenant_id": tid, "result": result})
-    if not all_results:
-        result = await _comment_service.analyze_and_store("5573c0ef-f0b0-4477-8681-c50e97a48280")
-        all_results.append({"tenant_id": "default", "result": result})
-    return {"message": "Comment analysis completed", "results": all_results}
+    result = await _comment_service.fetch_and_store()
+    return {"message": "Comment analysis completed", "result": result}
 
 
 @app.post("/api/refresh-all")
@@ -207,17 +198,13 @@ async def refresh_all():
     from services.profile_summarizer import get_profile_summarizer
     fetch_result = await _order_service.fetch_and_store_all()
     profile_result = await _profile_service.build_profiles()
-    tenant_ids = await _comment_service.get_tenant_ids()
-    comment_results = []
-    for tid in tenant_ids:
-        r = await _comment_service.analyze_and_store(tid)
-        comment_results.append(r)
+    comment_result = await _comment_service.fetch_and_store()
     summarizer = get_profile_summarizer()
     summary_count = await summarizer.generate_for_all()
     return {
         "fetch": fetch_result,
         "profiles": profile_result,
-        "comments": comment_results,
+        "comments": comment_result,
         "summaries_generated": summary_count,
     }
 
@@ -257,6 +244,12 @@ async def customer_detail(customer_id: str):
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
 
+
+@app.get("/api/customers/{customer_id}/bad-comments")
+async def customer_bad_comments(customer_id: str):
+    comments = await _comment_service.get_bad_comments(customer_id)
+    count = await _comment_service.get_bad_comment_count(customer_id)
+    return {"customer_id": customer_id, "bad_comments": comments, "count": count}
 
 @app.get("/api/customers/{customer_id}/profile")
 async def customer_profile(customer_id: str):

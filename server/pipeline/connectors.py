@@ -7,9 +7,13 @@ from pipeline.normalizers import normalize_phone, build_billzzy_address
 
 async def fetch_url(url: str, api_key: str, params: dict = None, timeout: int = 60, headers_extra: dict = None):
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **(headers_extra or {})}
+    parsed = httpx.URL(url)
+    merged = dict(parsed.params)
+    if params:
+        merged.update(params)
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:
-            resp = await client.get(url, headers=headers, params=params or {})
+            resp = await client.get(str(parsed.copy_with(params=None)), headers=headers, params=merged)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:

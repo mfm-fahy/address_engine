@@ -13,7 +13,7 @@ API_KEYS = {
         "per_request_timeout": 60
     },
     "instaxbot": {
-        "url": "https://app.instaxbot.com/api/f3engineapiroute/orders",
+        "url": "https://app.instaxbot.com/api/external/v2/data?resource=orders",
         "key": os.getenv("INSTAXBOT_API_KEY", ""),
         "timeout": 300,
         "per_request_timeout": 60
@@ -32,8 +32,8 @@ API_KEYS = {
     }
 }
 
-COMMENT_RULES_URL = "https://app.instaxbot.com/api/commentAutomationroute/rules"
-COMMENT_RULES_BY_MEDIA_URL = "https://app.instaxbot.com/api/commentAutomationroute/rules-by-media"
+COMMENTS_URL = "https://app.instaxbot.com/api/external/v2/data?resource=comments"
+BAD_COMMANDS_URL = "https://app.instaxbot.com/api/external/v2/data?resource=bad-commands"
 
 SENTIMENT_THRESHOLD = -0.3
 

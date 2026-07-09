@@ -74,7 +74,7 @@ class AlertRepository(BaseRepository):
     async def exists_by_message_pattern(self, pattern: str) -> bool:
         val = await self.fetchval(
             """SELECT 1 FROM alerts
-               WHERE type = 'negative_comment'
+               WHERE type IN ('negative_comment', 'bad_command')
                  AND message LIKE $1
                  AND source = 'instagram'
                LIMIT 1""",

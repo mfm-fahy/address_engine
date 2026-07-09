@@ -43,10 +43,33 @@ class CustomerRepository(BaseRepository):
         if not row:
             return None
         result = dict(row)
-        result["_id"] = result.pop("customer_id", "")
+        cid = result.pop("customer_id", "")
+        result["_id"] = cid
         for col in ("orders", "bills", "metadata", "stores", "address"):
             if isinstance(result.get(col), str):
                 result[col] = json.loads(result[col])
+
+        comments = await self.fetch(
+            """SELECT id, tenant_id, media_id, username, text,
+                      sentiment_score, sentiment_label, is_negative,
+                      triggered_rule, created_at
+               FROM comments
+               WHERE customer_id = $1
+               ORDER BY created_at DESC
+               LIMIT 50""",
+            cid,
+        )
+        result["comments"] = [dict(r) for r in comments]
+
+        alerts = await self.fetch(
+            """SELECT id, type, message, severity, source, is_read, created_at
+               FROM alerts
+               WHERE customer_id = $1
+               ORDER BY created_at DESC
+               LIMIT 50""",
+            cid,
+        )
+        result["alerts"] = [dict(r) for r in alerts]
         return result
 
     async def get_by_id_raw(self, customer_id: str) -> Optional[dict]:
