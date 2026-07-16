@@ -11,7 +11,7 @@ async function request(url, options = {}) {
 
 export const fetchCustomers = () => request('/customers')
 export const fetchCustomer = (id) => request(`/customers/${id}?include_comments=true`)
-export const fetchAlerts = () => request('/alerts')
+export const fetchAlerts = () => request('/alerts?limit=10000')
 export const triggerFetchData = () => request('/fetch-data', { method: 'POST' })
 export const triggerBuildProfiles = () => request('/build-profiles', { method: 'POST' })
 export const triggerAnalyzeComments = () => request('/analyze-comments', { method: 'POST' })

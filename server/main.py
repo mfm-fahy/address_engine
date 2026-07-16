@@ -320,7 +320,7 @@ async def customer_section_summaries(customer_id: str):
 
 @app.get("/api/alerts")
 async def list_alerts(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(10000, ge=1, le=50000),
     offset: int = Query(0, ge=0),
     severity: Optional[str] = Query(None, description="Filter by severity"),
     alert_type: Optional[str] = Query(None, description="Filter by type"),

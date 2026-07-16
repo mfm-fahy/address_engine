@@ -6,6 +6,7 @@ from repositories.alert_repo import AlertRepository
 from repositories.order_repo import RawOrderRepository
 from repositories.customer_repo import CustomerRepository
 from services.cache_manager import cache_manager
+from services.alert_service import AlertService
 
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -158,6 +159,7 @@ class CommentService:
                     message=alert_message,
                     severity="warning",
                     source="instagram",
+                    customer_id=customer_id,
                 )
 
         return {
@@ -185,6 +187,7 @@ class CommentService:
 
         await cache_manager.invalidate_prefix("cust:list")
         await cache_manager.invalidate("dash:stats")
+        await AlertService().invalidate_cache()
         return {
             "comments_fetched": len(results["comments"]),
             "bad_fetched": len(results["bad_commands"]),

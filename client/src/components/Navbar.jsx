@@ -31,7 +31,14 @@ export default function Navbar({ alertCount = 0 }) {
       </div>
       <div className="navbar-right">
         {alertCount > 0 && (
-          <div className="nav-alert-badge" role="status" aria-label={`${alertCount} alerts`}>
+          <div
+            className="nav-alert-badge"
+            role="button"
+            tabIndex={0}
+            aria-label={`${alertCount} alerts`}
+            onClick={() => navigate('/alerts')}
+            onKeyDown={e => e.key === 'Enter' && navigate('/alerts')}
+          >
             <Bell size={14} />
             <span>{alertCount}</span>
           </div>

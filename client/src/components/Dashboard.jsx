@@ -7,7 +7,6 @@ import {
   Package, SlidersHorizontal, LayoutGrid, List, Inbox, UserCheck
 } from 'lucide-react'
 import { fetchCustomers, fetchAlerts, triggerRefreshAll } from '../api'
-import AlertsPanel from './AlertsPanel'
 import { FilterPanel, SkeletonStats, SkeletonGrid, SkeletonTable, EmptyState, useToast } from './ui'
 
 const SOURCES = [
@@ -234,14 +233,21 @@ export default function Dashboard() {
             <div className="stat-sub">{stats.withOrders} with orders &middot; {stats.withBills} with bills</div>
           </div>
         </div>
-        <div className="stat-card stat-card-accent danger">
+        <div
+          className="stat-card stat-card-accent danger"
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/alerts')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => e.key === 'Enter' && navigate('/alerts')}
+        >
           <div className="stat-icon stat-icon-bg-danger"><AlertTriangle size={20} /></div>
           <div className="stat-body">
             <div className="stat-label">Alerts</div>
             <div className="stat-value" style={{ color: stats.negativeAlerts > 0 ? 'var(--danger)' : 'var(--success)' }}>
               {stats.negativeAlerts}
             </div>
-            <div className="stat-sub">{stats.negativeAlerts > 0 ? 'Requires attention' : 'All clear'}</div>
+            <div className="stat-sub">{stats.negativeAlerts > 0 ? 'Click to view all' : 'All clear'}</div>
           </div>
         </div>
         <div className="stat-card stat-card-accent warning">
@@ -286,12 +292,6 @@ export default function Dashboard() {
             ><List size={14} /></button>
         </div>
       </div>
-
-      {alerts.filter(a => a.severity === 'warning').length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <AlertsPanel alerts={alerts.filter(a => a.severity === 'warning')} />
-        </div>
-      )}
 
       {filtered.length === 0 ? (
         <EmptyState

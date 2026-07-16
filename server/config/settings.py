@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://customer360:customer360@localhost:5432/customer360")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://customer360:customer360@postgres:5432/customer360")
 
 API_KEYS = {
     "gowhats": {
@@ -43,7 +43,7 @@ DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
 DB_POOL_MAX_INACTIVE_CONNECTION_LIFETIME = float(os.getenv("DB_POOL_MAX_INACTIVE_CONNECTION_LIFETIME", "300.0"))
 
 # Redis configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # Cache TTL values (seconds) — configurable via env vars
 DASHBOARD_TTL = int(os.getenv("CACHE_DASHBOARD_TTL", "120"))

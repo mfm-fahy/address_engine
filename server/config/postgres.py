@@ -108,9 +108,11 @@ async def init_schema():
                 sentiment_label TEXT DEFAULT 'neutral',
                 is_negative BOOLEAN DEFAULT FALSE,
                 triggered_rule TEXT DEFAULT '',
+                comment_id TEXT DEFAULT '',
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_comments_customer ON comments(customer_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_comments_comment_id ON comments(comment_id) WHERE comment_id != '';
 
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,
@@ -289,6 +291,12 @@ async def init_schema():
         # Phase 9: Customer address from shipping address
         await conn.execute("""
             ALTER TABLE customers ADD COLUMN IF NOT EXISTS address JSONB DEFAULT '{}';
+        """)
+
+        # Phase 10: comment_id column for deduplication
+        await conn.execute("""
+            ALTER TABLE comments ADD COLUMN IF NOT EXISTS comment_id TEXT DEFAULT '';
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_comments_comment_id ON comments(comment_id) WHERE comment_id != '';
         """)
         print("PostgreSQL schema initialized (Phase 2 additions applied)")
 

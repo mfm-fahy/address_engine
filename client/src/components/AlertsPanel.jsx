@@ -9,7 +9,7 @@ export default function AlertsPanel({ alerts, onDismiss }) {
         <AlertTriangle size={14} />
         Alerts ({alerts.length})
       </h3>
-      {alerts.slice(0, 10).map((a, i) => (
+      {alerts.map((a, i) => (
         <div key={i} className={`alert-item ${a.severity === 'warning' ? 'warning' : 'error'}`}>
           {a.type === 'negative_comment' ? (
             <MessageCircle size={16} className="alert-icon" style={{ color: 'var(--danger)' }} />

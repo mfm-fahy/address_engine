@@ -5,7 +5,7 @@ from repositories.base import BaseRepository
 
 
 class AlertRepository(BaseRepository):
-    async def get_all(self, limit: int = 100) -> list[dict]:
+    async def get_all(self, limit: int = 10000) -> list[dict]:
         rows = await self.fetch(
             "SELECT * FROM alerts ORDER BY created_at DESC LIMIT $1", limit
         )
@@ -83,13 +83,14 @@ class AlertRepository(BaseRepository):
         return val is not None
 
     async def insert(self, alert_type: str, message: str, severity: str = "warning",
-                     source: str = "instagram") -> str:
+                     source: str = "instagram", customer_id: str = "") -> str:
         return await self.execute(
-            """INSERT INTO alerts (type, message, severity, source, created_at)
-               VALUES ($1, $2, $3, $4, $5)""",
+            """INSERT INTO alerts (type, message, severity, source, customer_id, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6)""",
             alert_type,
             message,
             severity,
             source,
+            customer_id or None,
             datetime.utcnow(),
         )

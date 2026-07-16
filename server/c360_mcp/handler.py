@@ -12,7 +12,7 @@ from services.recommendation_service import RecommendationService
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://customer360:customer360@localhost:5432/customer360",
+    "postgresql://customer360:customer360@postgres:5432/customer360",
 )
 
 _pool: asyncpg.Pool = None
