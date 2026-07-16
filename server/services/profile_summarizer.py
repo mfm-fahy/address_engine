@@ -4,88 +4,176 @@ from repositories.customer_repo import CustomerRepository
 from repositories.feature_repo import FeatureRepository
 
 
+def _calculate_customer_score(customer: dict, features: Optional[dict] = None) -> dict:
+    """Score a customer on multiple factors and return a verdict."""
+    total_spent = float(customer.get("total_spent", 0) or 0)
+    total_orders = int(customer.get("total_orders", 0) or 0)
+    total_bills = int(customer.get("total_bills", 0) or 0)
+    sources = customer.get("sources", []) or []
+    alerts = customer.get("alerts", []) or []
+    orders = customer.get("orders", []) or []
+    comments = customer.get("comments", []) or []
+
+    score = 0
+    positives = []
+    negatives = []
+
+    # --- Multi-platform usage (good) ---
+    if len(sources) >= 3:
+        score += 25
+        positives.append(f"active on {len(sources)} platforms")
+    elif len(sources) >= 2:
+        score += 15
+        positives.append("purchases from multiple platforms")
+    elif len(sources) == 1:
+        score += 5
+
+    # --- Spending (good) ---
+    if total_spent >= 100000:
+        score += 25
+        positives.append("high spender with significant lifetime value")
+    elif total_spent >= 50000:
+        score += 20
+        positives.append("strong spending history")
+    elif total_spent >= 10000:
+        score += 10
+        positives.append("moderate spending")
+
+    # --- Order frequency (good) ---
+    if total_orders >= 20:
+        score += 20
+        positives.append("frequent buyer with repeat purchases")
+    elif total_orders >= 10:
+        score += 15
+        positives.append("consistent ordering pattern")
+    elif total_orders >= 3:
+        score += 5
+
+    # --- Returns (bad) ---
+    return_count = 0
+    for o in orders:
+        status = (o.get("status") or "").lower()
+        if status in ("cancelled", "returned", "refunded"):
+            return_count += 1
+    if total_orders > 0:
+        return_rate = return_count / total_orders
+    else:
+        return_rate = 0
+
+    if return_rate > 0.4:
+        score -= 30
+        negatives.append(f"very high return/cancellation rate ({return_count} of {total_orders} orders)")
+    elif return_rate > 0.2:
+        score -= 15
+        negatives.append(f"elevated return/cancellation rate ({return_count} of {total_orders} orders)")
+    elif return_count > 0:
+        score -= 5
+
+    # --- Alerts / negative behavior (bad) ---
+    neg_alerts = [a for a in alerts if a.get("severity") == "warning" or a.get("type") in ("negative_comment", "bad_command")]
+    if len(neg_alerts) >= 5:
+        score -= 25
+        negatives.append(f"multiple alerts ({len(neg_alerts)}) for negative behavior")
+    elif len(neg_alerts) >= 2:
+        score -= 10
+        negatives.append(f"several alerts ({len(neg_alerts)}) flagged")
+
+    # --- Negative comments ---
+    neg_comments = [c for c in comments if c.get("is_negative")]
+    if len(neg_comments) >= 3:
+        score -= 15
+        negatives.append(f"multiple negative comments ({len(neg_comments)})")
+    elif len(neg_comments) >= 1:
+        score -= 5
+
+    # --- Payment health (from features) ---
+    if features:
+        payment_health = float(features.get("payment_health_score", 50) or 50)
+        return_rate_feat = float(features.get("return_rate", 0) or 0)
+        churn = float(features.get("churn_probability", 0) or 0)
+        days_inactive = int(features.get("days_since_last_activity", 0) or 0)
+        orders_30d = int(features.get("total_orders_30d", 0) or 0)
+
+        if return_rate_feat > return_rate:
+            return_rate = return_rate_feat
+            if return_rate > 0.4:
+                score -= 20
+                negatives.append("high return rate based on behavior data")
+            elif return_rate > 0.2:
+                score -= 10
+
+        if payment_health < 30:
+            score -= 15
+            negatives.append("poor payment health")
+        elif payment_health > 70:
+            score += 10
+            positives.append("good payment history")
+
+        if churn > 0.7:
+            score -= 15
+            negatives.append("very likely to churn")
+        elif churn > 0.5:
+            score -= 5
+
+        if days_inactive > 180:
+            score -= 10
+            negatives.append("inactive for over 6 months")
+        elif days_inactive > 90:
+            score -= 5
+
+        if orders_30d >= 3:
+            score += 10
+            positives.append("very active recently")
+        elif orders_30d >= 1:
+            score += 5
+            positives.append("recently active")
+
+    # --- Clamp score 0-100 ---
+    score = max(0, min(100, score))
+
+    if score >= 70:
+        verdict = "Good Customer"
+    elif score >= 40:
+        verdict = "Average Customer"
+    else:
+        verdict = "At-Risk Customer"
+
+    return {
+        "score": score,
+        "verdict": verdict,
+        "positives": positives,
+        "negatives": negatives,
+        "return_rate": return_rate,
+    }
+
+
 def _generate_business_summary(customer: dict, features: Optional[dict] = None) -> str:
     name = customer.get("name", "Unknown")
     total_spent = float(customer.get("total_spent", 0) or 0)
     total_orders = int(customer.get("total_orders", 0) or 0)
     total_bills = int(customer.get("total_bills", 0) or 0)
-    sources = customer.get("sources", []) or []
-    stores = customer.get("stores", []) or []
-    last_activity = customer.get("last_activity", "")
-    alerts = customer.get("alerts", []) or []
-    has_alerts = len(alerts) > 0
 
-    store_count = len(stores)
-    source_count = len(sources)
+    assessment = _calculate_customer_score(customer, features)
 
     parts = []
-    parts.append(
-        f"{name} has a total spend of \u20b9{total_spent:,.2f} "
-        f"across {total_orders} order(s) and {total_bills} bill(s)."
-    )
 
-    if features:
-        def _f(key, default):
-            v = features.get(key)
-            return v if v is not None else default
+    # Verdict
+    parts.append(f"{name} is assessed as a {assessment['verdict']} (score: {assessment['score']}/100).")
 
-        ltv = float(_f("lifetime_value", total_spent))
-        aov = float(_f("average_order_value", 0))
-        churn = float(_f("churn_probability", 0))
-        loyalty = float(_f("loyalty_score", 0))
-        return_rate = float(_f("return_rate", 0))
-        payment_health = float(_f("payment_health_score", 0))
-        days_inactive = int(_f("days_since_last_activity", 999))
-        orders_30d = int(_f("total_orders_30d", 0))
-        spent_30d = float(_f("total_spent_30d", 0))
+    # Basic stats
+    spend_text = f"Total spend is \u20b9{total_spent:,.2f} across {total_orders} order(s)"
+    if total_bills > 0:
+        spend_text += f" and {total_bills} bill(s)"
+    spend_text += "."
+    parts.append(spend_text)
 
-        parts.append(
-            f"Average order value is \u20b9{aov:,.2f} "
-            f"with a customer lifetime value of \u20b9{ltv:,.2f}."
-        )
+    # What they do right
+    if assessment["positives"]:
+        parts.append("Strengths: " + "; ".join(assessment["positives"]) + ".")
 
-        recent_activity = []
-        if orders_30d > 0:
-            recent_activity.append(f"{orders_30d} order(s) in the last 30 days")
-        if spent_30d > 0:
-            recent_activity.append(f"\u20b9{spent_30d:,.2f} spent recently")
-        if recent_activity:
-            parts.append(f"Recent engagement shows {'; '.join(recent_activity)}.")
-
-        opportunities = []
-        risks = []
-
-        if loyalty >= 70:
-            opportunities.append("high loyalty score")
-        if days_inactive <= 7:
-            opportunities.append("recently active")
-        if days_inactive <= 30 and orders_30d >= 2:
-            opportunities.append("consistent purchase pattern")
-
-        if churn >= 0.5:
-            risks.append("elevated churn risk")
-        if payment_health < 40:
-            risks.append("low payment health")
-        if return_rate > 0.2:
-            risks.append("high return rate")
-        if days_inactive > 90:
-            risks.append("long inactivity period")
-
-        if opportunities:
-            parts.append(f"Opportunities include {', '.join(opportunities)}.")
-        if risks:
-            parts.append(f"Risks include {', '.join(risks)}.")
-        if has_alerts:
-            parts.append(f"Has {len(alerts)} active alert(s) requiring attention.")
-
-    if source_count > 0:
-        clean_sources = [s for s in sources if s]
-        if clean_sources:
-            parts.append(f"Data sources: {', '.join(clean_sources)}.")
-    if store_count > 0:
-        store_names = [s.get("name", "") for s in stores if s and s.get("name")]
-        if store_names:
-            parts.append(f"Stores: {', '.join(store_names[:5])}.")
+    # What's wrong
+    if assessment["negatives"]:
+        parts.append("Concerns: " + "; ".join(assessment["negatives"]) + ".")
 
     summary = " ".join(parts)
 

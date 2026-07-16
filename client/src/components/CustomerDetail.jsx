@@ -282,10 +282,10 @@ export default function CustomerDetail() {
           </div>
         )}
         <div className="badges">
-          {customer.sources?.includes('instaxbot') && <span className="badge badge-insta">Instagram</span>}
-          {customer.sources?.includes('gowhats') && <span className="badge badge-whats">WhatsApp</span>}
+          {customer.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
+          {customer.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
           {customer.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-          {customer.sources?.includes('bill') && <span className="badge badge-bill">Bill</span>}
+          {customer.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
         </div>
       </div>
 

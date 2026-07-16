@@ -10,10 +10,10 @@ import { fetchCustomers, fetchAlerts, triggerRefreshAll } from '../api'
 import { FilterPanel, SkeletonStats, SkeletonGrid, SkeletonTable, EmptyState, useToast } from './ui'
 
 const SOURCES = [
-  { key: 'instaxbot', label: 'Instagram', icon: Instagram, color: '#e1306c' },
-  { key: 'gowhats', label: 'WhatsApp', icon: MessageCircle, color: '#25d366' },
+  { key: 'instaxbot', label: 'Instaxbot', icon: Instagram, color: '#e1306c' },
+  { key: 'gowhats', label: 'GoWhats', icon: MessageCircle, color: '#25d366' },
   { key: 'f3', label: 'F3', icon: Globe, color: '#a855f7' },
-  { key: 'bill', label: 'Bill', icon: CreditCard, color: '#3b82f6' },
+  { key: 'bill', label: 'Billzy', icon: CreditCard, color: '#3b82f6' },
 ]
 
 export default function Dashboard() {
@@ -255,7 +255,7 @@ export default function Dashboard() {
           <div className="stat-body">
             <div className="stat-label">Platforms Synced</div>
             <div className="stat-value">4</div>
-            <div className="stat-sub">Instagram &middot; WhatsApp &middot; F3 &middot; Bill</div>
+            <div className="stat-sub">Instaxbot &middot; GoWhats &middot; F3 &middot; Billzy</div>
           </div>
         </div>
       </div>
@@ -328,10 +328,10 @@ export default function Dashboard() {
               </div>
               <div className="phone">{c.phone ? `+91 ${c.phone}` : 'No phone'}</div>
               <div className="badges">
-                {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instagram</span>}
-                {c.sources?.includes('gowhats') && <span className="badge badge-whats">WhatsApp</span>}
+                {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
+                {c.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
                 {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                {c.sources?.includes('bill') && <span className="badge badge-bill">Bill</span>}
+                {c.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
                 {c.username && <span className="badge badge-default">@{c.username}</span>}
               </div>
               <div className="stats-row">
@@ -367,9 +367,9 @@ export default function Dashboard() {
               <span className="list-phone">{c.phone ? `+91 ${c.phone}` : '-'}</span>
               <span className="list-sources">
                 {c.sources?.includes('instaxbot') && <span className="badge badge-insta">IG</span>}
-                {c.sources?.includes('gowhats') && <span className="badge badge-whats">WA</span>}
+                {c.sources?.includes('gowhats') && <span className="badge badge-whats">GW</span>}
                 {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                {c.sources?.includes('bill') && <span className="badge badge-bill">BL</span>}
+                {c.sources?.includes('bill') && <span className="badge badge-bill">BZ</span>}
               </span>
               <span>{c.total_orders}</span>
               <span className="list-spent">₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>

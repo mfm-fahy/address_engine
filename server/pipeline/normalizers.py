@@ -56,7 +56,10 @@ def extract_source_phone(source: str, order: dict) -> str:
     if source == "gowhats":
         return order.get("customerPhone", "") or order.get("customerDetails", {}).get("phone", "")
     elif source == "instaxbot":
-        return order.get("customer", {}).get("phone", "")
+        phone = order.get("phone_number", "")
+        if not phone:
+            phone = order.get("customer", {}).get("phone", "")
+        return phone
     elif source == "f3":
         phone = order.get("customerPhone", "")
         if not phone:
@@ -73,7 +76,10 @@ def extract_source_name(source: str, order: dict) -> str:
     if source == "gowhats":
         return order.get("customerDetails", {}).get("name", "")
     elif source == "instaxbot":
-        return order.get("customer", {}).get("name", "")
+        name = order.get("customer_name", "")
+        if not name:
+            name = order.get("customer", {}).get("name", "")
+        return name
     elif source == "f3":
         return order.get("customerName", "")
     return ""

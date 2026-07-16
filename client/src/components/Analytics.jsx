@@ -11,7 +11,7 @@ import {
 import { SkeletonStats, SkeletonChart, EmptyState, useToast } from './ui'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#3b82f6', '#e1306c', '#a855f7']
-const SOURCE_LABELS = { instaxbot: 'Instagram', gowhats: 'WhatsApp', f3: 'F3', bill: 'Bill' }
+const SOURCE_LABELS = { instaxbot: 'Instaxbot', gowhats: 'GoWhats', f3: 'F3', bill: 'Billzy' }
 
 const fmt = (n) => !isFinite(n) ? '₹0' : n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(1)}K` : `₹${n}`
 
