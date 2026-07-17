@@ -11,3 +11,7 @@ addressengine1
 addressengine1.ppk
 *.ppk
 *.pem
+client/dist/
+server/customer360.db
+test/
+data/

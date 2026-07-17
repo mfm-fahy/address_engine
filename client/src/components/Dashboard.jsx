@@ -4,10 +4,11 @@ import {
   ShoppingCart, MessageCircle, AlertTriangle, TrendingUp,
   RefreshCw, Search, Users, X,
   Instagram, Globe, CreditCard,
-  Package, SlidersHorizontal, LayoutGrid, List, Inbox, UserCheck
+  Package, LayoutGrid, List, Inbox
 } from 'lucide-react'
+import { FixedSizeList as VList } from 'react-window'
 import { fetchCustomers, fetchAlerts, triggerRefreshAll } from '../api'
-import { FilterPanel, SkeletonStats, SkeletonGrid, SkeletonTable, EmptyState, useToast } from './ui'
+import { FilterPanel, SkeletonStats, SkeletonGrid, EmptyState, useToast } from './ui'
 
 const SOURCES = [
   { key: 'instaxbot', label: 'Instaxbot', icon: Instagram, color: '#e1306c' },
@@ -17,21 +18,89 @@ const SOURCES = [
 ]
 
 const PAGE_SIZE = 50000
+const CARD_HEIGHT_GRID = 160
+const ROW_HEIGHT_LIST = 56
+
+function GridRow({ index, style, data }) {
+  const { items, cols, navigate } = data
+  const rowItems = items.slice(index * cols, index * cols + cols)
+  return (
+    <div style={{ ...style, display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16, padding: '0 0 16px 0' }}>
+      {rowItems.map(c => (
+        <div
+          key={c.customer_id}
+          className="customer-card"
+          onClick={() => navigate(`/customer/${c.customer_id}`)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
+        >
+          <div className="card-top">
+            <div className="name">{c.name || 'Unknown'}</div>
+            {c.total_spent >= 50000 && <span className="badge badge-vip">VIP</span>}
+          </div>
+          <div className="phone">{c.phone ? `+91 ${c.phone}` : 'No phone'}</div>
+          <div className="badges">
+            {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
+            {c.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
+            {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
+            {c.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
+            {c.username && <span className="badge badge-default">@{c.username}</span>}
+          </div>
+          <div className="stats-row">
+            <span><ShoppingCart size={12} /> {c.total_orders} orders</span>
+            <span><TrendingUp size={12} /> ₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
+            <span><MessageCircle size={12} /> {c.comment_count || 0}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ListRow({ index, style, data }) {
+  const c = data.items[index]
+  if (!c) return null
+  const { navigate } = data
+  return (
+    <div
+      style={style}
+      className="list-row"
+      onClick={() => navigate(`/customer/${c.customer_id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
+    >
+      <span className="list-name">
+        {c.name || 'Unknown'}
+        <span className="list-id">{c.customer_id}</span>
+      </span>
+      <span className="list-phone">{c.phone ? `+91 ${c.phone}` : '-'}</span>
+      <span className="list-sources">
+        {c.sources?.includes('instaxbot') && <span className="badge badge-insta">IG</span>}
+        {c.sources?.includes('gowhats') && <span className="badge badge-whats">GW</span>}
+        {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
+        {c.sources?.includes('bill') && <span className="badge badge-bill">BZ</span>}
+      </span>
+      <span>{c.total_orders}</span>
+      <span className="list-spent">₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [customers, setCustomers] = useState([])
   const [alerts, setAlerts] = useState([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const customersLenRef = useRef(0)
-  const loadingMoreRef = useRef(false)
   const autoLoadingRef = useRef(false)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState('grid')
+  const [gridCols, setGridCols] = useState(3)
+  const containerRef = useRef(null)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -46,18 +115,23 @@ export default function Dashboard() {
   const [spendRange, setSpendRange] = useState({ minSpent: '', maxSpent: '' })
 
   useEffect(() => {
+    const calcCols = () => {
+      const w = containerRef.current?.offsetWidth || 1200
+      setGridCols(Math.max(1, Math.floor((w + 16) / 336)))
+    }
+    calcCols()
+    window.addEventListener('resize', calcCols)
+    return () => window.removeEventListener('resize', calcCols)
+  }, [])
+
+  useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 400)
     return () => clearTimeout(t)
   }, [search])
 
-  const loadData = useCallback(async (reset = true, pageNum = 0) => {
+  const loadData = useCallback(async (reset = true, offset = 0) => {
     try {
-      if (reset) {
-        setLoading(true)
-      } else {
-        setLoadingMore(true)
-      }
-      const offset = reset ? 0 : (pageNum + 1) * PAGE_SIZE
+      if (reset) setLoading(true)
       const sortMap = { recent: 'last_activity', name: 'name', spent: 'total_spent', orders: 'total_orders' }
       const sortCol = sortMap[filters.sortBy] || 'last_activity'
       const [cRes, aRes] = await Promise.all([
@@ -77,14 +151,12 @@ export default function Dashboard() {
       toast('Failed to load dashboard data', 'error')
     } finally {
       setLoading(false)
-      setLoadingMore(false)
-      loadingMoreRef.current = false
     }
   }, [toast, debouncedSearch, filters.sortBy])
 
   useEffect(() => { customersLenRef.current = customers.length }, [customers.length])
 
-  useEffect(() => { loadData(true) }, [debouncedSearch, filters.sortBy])
+  useEffect(() => { loadData(true, 0) }, [debouncedSearch, filters.sortBy])
 
   useEffect(() => {
     if (!loading && total > 0 && customersLenRef.current < total && !autoLoadingRef.current) {
@@ -111,33 +183,12 @@ export default function Dashboard() {
     }
   }, [loading, total, debouncedSearch, filters.sortBy])
 
-  const loadMore = useCallback(() => {
-    if (loadingMoreRef.current) return
-    const len = customersLenRef.current
-    if (len >= total) return
-    loadingMoreRef.current = true
-    setLoadingMore(true)
-    const nextPage = Math.floor(len / PAGE_SIZE)
-    setPage(nextPage)
-    loadData(false, nextPage).finally(() => { loadingMoreRef.current = false })
-  }, [loadData, total])
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (customersLenRef.current >= total) return
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
-        loadMore()
-      }
-    }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [loadMore, total])
-
   const handleRefresh = async () => {
     setRefreshing(true)
+    autoLoadingRef.current = false
     try {
       await triggerRefreshAll()
-      await loadData()
+      await loadData(true, 0)
     } catch (e) {
       console.error('Refresh failed', e)
       toast('Sync failed. Please try again.', 'error')
@@ -146,19 +197,10 @@ export default function Dashboard() {
     }
   }
 
-  const toggleSource = useCallback((key) => {
-    setFilters(f => ({
-      ...f,
-      sources: f.sources.includes(key)
-        ? f.sources.filter(s => s !== key)
-        : [...f.sources, key]
-    }))
-  }, [])
-
   const handleFilterChange = useCallback((key, value) => {
     setFilters(f => ({ ...f, [key]: value }))
     if (key === 'sortBy') {
-      setPage(0)
+      autoLoadingRef.current = false
       const sortMap = { recent: 'last_activity', name: 'name', spent: 'total_spent', orders: 'total_orders' }
       const sortCol = sortMap[value] || 'last_activity'
       setLoading(true)
@@ -190,21 +232,17 @@ export default function Dashboard() {
   }, [filters, spendRange])
 
   const filtered = useMemo(() => {
-    let result = [...customers]
+    let result = customers
 
     if (filters.sources.length > 0) {
-      result = result.filter(c =>
-        filters.sources.some(s => c.sources?.includes(s))
-      )
+      result = result.filter(c => filters.sources.some(s => c.sources?.includes(s)))
     }
-
     if (filters.hasOrders) result = result.filter(c => c.total_orders > 0)
     if (filters.hasBills) result = result.filter(c => c.total_bills > 0)
     if (filters.hasAlerts) {
-      const alertCustomerIds = new Set(alerts.map(a => a.customer_id))
-      result = result.filter(c => alertCustomerIds.has(c.customer_id))
+      const ids = new Set(alerts.map(a => a.customer_id))
+      result = result.filter(c => ids.has(c.customer_id))
     }
-
     if (spendRange.minSpent) result = result.filter(c => (c.total_spent || 0) >= Number(spendRange.minSpent))
     if (spendRange.maxSpent) result = result.filter(c => (c.total_spent || 0) <= Number(spendRange.maxSpent))
 
@@ -216,55 +254,29 @@ export default function Dashboard() {
     withOrders: customers.filter(c => c.total_orders > 0).length,
     withBills: customers.filter(c => c.total_bills > 0).length,
     negativeAlerts: alerts.filter(a => a.severity === 'warning').length,
-    totalSpent: customers.reduce((s, c) => s + (isFinite(c.total_spent) ? c.total_spent : 0), 0),
-    multiSource: customers.filter(c => (c.sources?.length || 0) > 1).length,
   }), [customers, alerts])
 
   const filterConfig = [
-    {
-      label: 'Source',
-      key: 'sources',
-      type: 'chips',
-      options: SOURCES.map(s => ({ value: s.key, label: s.label, icon: s.icon, color: s.color })),
-    },
-    {
-      label: 'Has',
-      type: 'toggle',
-      options: [
-        { value: 'hasOrders', label: 'Orders' },
-        { value: 'hasBills', label: 'Bills' },
-        { value: 'hasAlerts', label: 'Alerts' },
-      ],
-    },
-    {
-      label: 'Spent Range (₹)',
-      type: 'range',
-      key: 'spend',
-      minKey: 'minSpent',
-      maxKey: 'maxSpent',
-      minPlaceholder: 'Min',
-      maxPlaceholder: 'Max',
-    },
-    {
-      label: 'Sort by',
-      key: 'sortBy',
-      type: 'select',
-      options: [
-        { value: 'recent', label: 'Recent Activity' },
-        { value: 'name', label: 'Name A-Z' },
-        { value: 'spent', label: 'Highest Spent' },
-        { value: 'orders', label: 'Most Orders' },
-      ],
-    },
+    { label: 'Source', key: 'sources', type: 'chips', options: SOURCES.map(s => ({ value: s.key, label: s.label, icon: s.icon, color: s.color })) },
+    { label: 'Has', type: 'toggle', options: [
+      { value: 'hasOrders', label: 'Orders' },
+      { value: 'hasBills', label: 'Bills' },
+      { value: 'hasAlerts', label: 'Alerts' },
+    ]},
+    { label: 'Spent Range (₹)', type: 'range', key: 'spend', minKey: 'minSpent', maxKey: 'maxSpent', minPlaceholder: 'Min', maxPlaceholder: 'Max' },
+    { label: 'Sort by', key: 'sortBy', type: 'select', options: [
+      { value: 'recent', label: 'Recent Activity' },
+      { value: 'name', label: 'Name A-Z' },
+      { value: 'spent', label: 'Highest Spent' },
+      { value: 'orders', label: 'Most Orders' },
+    ]},
   ]
 
   if (loading) {
     return (
       <div>
         <div className="page-toolbar">
-          <div className="page-toolbar-left">
-            <h1 className="page-title">Dashboard</h1>
-          </div>
+          <div className="page-toolbar-left"><h1 className="page-title">Dashboard</h1></div>
         </div>
         <SkeletonStats />
         <SkeletonGrid count={6} />
@@ -272,19 +284,21 @@ export default function Dashboard() {
     )
   }
 
+  const listHeight = Math.min(filtered.length * ROW_HEIGHT_LIST, 800)
+  const gridRows = Math.ceil(filtered.length / gridCols)
+  const gridHeight = Math.min(gridRows * (CARD_HEIGHT_GRID + 16), 800)
+
   return (
-    <div>
+    <div ref={containerRef}>
       <div className="page-toolbar">
         <div className="page-toolbar-left">
           <h1 className="page-title">Dashboard</h1>
-          <span className="page-subtitle">{customers.length} customers tracked</span>
+          <span className="page-subtitle">
+            {customers.length} customers loaded {customers.length < total && `of ${total}`}
+          </span>
         </div>
         <div className="header-actions">
-          <button
-            className="btn btn-primary"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
+          <button className="btn btn-primary" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
             {refreshing ? 'Syncing...' : 'Sync All Data'}
           </button>
@@ -296,24 +310,15 @@ export default function Dashboard() {
           <div className="stat-icon stat-icon-bg-primary"><Users size={20} /></div>
           <div className="stat-body">
             <div className="stat-label">Total Customers</div>
-            <div className="stat-value">{stats.total}</div>
+            <div className="stat-value">{stats.total.toLocaleString()}</div>
             <div className="stat-sub">{stats.withOrders} with orders &middot; {stats.withBills} with bills</div>
           </div>
         </div>
-        <div
-          className="stat-card stat-card-accent danger"
-          style={{ cursor: 'pointer' }}
-          onClick={() => navigate('/alerts')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && navigate('/alerts')}
-        >
+        <div className="stat-card stat-card-accent danger" style={{ cursor: 'pointer' }} onClick={() => navigate('/alerts')} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && navigate('/alerts')}>
           <div className="stat-icon stat-icon-bg-danger"><AlertTriangle size={20} /></div>
           <div className="stat-body">
             <div className="stat-label">Alerts</div>
-            <div className="stat-value" style={{ color: stats.negativeAlerts > 0 ? 'var(--danger)' : 'var(--success)' }}>
-              {stats.negativeAlerts}
-            </div>
+            <div className="stat-value" style={{ color: stats.negativeAlerts > 0 ? 'var(--danger)' : 'var(--success)' }}>{stats.negativeAlerts}</div>
             <div className="stat-sub">{stats.negativeAlerts > 0 ? 'Click to view all' : 'All clear'}</div>
           </div>
         </div>
@@ -333,11 +338,8 @@ export default function Dashboard() {
         searchPlaceholder="Search by name, phone, ID, or email..."
         filters={{ ...filters, ...spendRange }}
         onFilterChange={(key, value) => {
-          if (key === 'minSpent' || key === 'maxSpent') {
-            handleRangeChange(key, value)
-          } else {
-            handleFilterChange(key, value)
-          }
+          if (key === 'minSpent' || key === 'maxSpent') handleRangeChange(key, value)
+          else handleFilterChange(key, value)
         }}
         filterConfig={filterConfig}
         activeFilterCount={activeFilterCount}
@@ -347,16 +349,8 @@ export default function Dashboard() {
       <div className="results-meta">
         <span>{filtered.length} of {customers.length} customers</span>
         <div className="view-toggle">
-            <button
-              className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setViewMode('grid')}
-              aria-label="Grid view"
-            ><LayoutGrid size={14} /></button>
-            <button
-              className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setViewMode('list')}
-              aria-label="List view"
-            ><List size={14} /></button>
+          <button className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('grid')} aria-label="Grid view"><LayoutGrid size={14} /></button>
+          <button className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} aria-label="List view"><List size={14} /></button>
         </div>
       </div>
 
@@ -368,56 +362,22 @@ export default function Dashboard() {
             ? 'Click "Sync All Data" to fetch from all platforms and build customer profiles.'
             : 'Try adjusting your filters or search terms.'}
           action={customers.length > 0 ? (
-            <button className="btn btn-secondary btn-sm" onClick={clearFilters}>
-              <X size={12} /> Clear all filters
-            </button>
+            <button className="btn btn-secondary btn-sm" onClick={clearFilters}><X size={12} /> Clear all filters</button>
           ) : (
-            <button className="btn btn-primary btn-sm" onClick={handleRefresh}>
-              <RefreshCw size={12} /> Sync All Data
-            </button>
+            <button className="btn btn-primary btn-sm" onClick={handleRefresh}><RefreshCw size={12} /> Sync All Data</button>
           )}
         />
       ) : viewMode === 'grid' ? (
-        <>
-          <div className="customers-grid">
-            {filtered.map(c => (
-              <div
-                key={c.customer_id}
-                className="customer-card"
-                onClick={() => navigate(`/customer/${c.customer_id}`)}
-                role="button"
-                tabIndex={0}
-                aria-label={`View customer ${c.name || 'Unknown'}`}
-                onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
-              >
-                <div className="card-top">
-                  <div className="name">{c.name || 'Unknown'}</div>
-                  {c.total_spent >= 50000 && <span className="badge badge-vip">VIP</span>}
-                </div>
-                <div className="phone">{c.phone ? `+91 ${c.phone}` : 'No phone'}</div>
-                <div className="badges">
-                  {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
-                  {c.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
-                  {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                  {c.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
-                  {c.username && <span className="badge badge-default">@{c.username}</span>}
-                </div>
-                <div className="stats-row">
-                  <span><ShoppingCart size={12} /> {c.total_orders} orders</span>
-                  <span><TrendingUp size={12} /> ₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
-                  <span><MessageCircle size={12} /> {c.comment_count || 0}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {customers.length < total && (
-            <div style={{ textAlign: 'center', padding: '2rem' }}>
-              <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? 'Loading...' : `Load More (${customers.length} of ${total})`}
-              </button>
-            </div>
-          )}
-        </>
+        <VList
+          height={gridHeight}
+          itemCount={gridRows}
+          itemSize={CARD_HEIGHT_GRID + 16}
+          width="100%"
+          overscanCount={3}
+          itemData={{ items: filtered, cols: gridCols, navigate }}
+        >
+          {GridRow}
+        </VList>
       ) : (
         <>
           <div className="customers-list">
@@ -428,38 +388,17 @@ export default function Dashboard() {
               <span>Orders</span>
               <span>Spent</span>
             </div>
-            {filtered.map(c => (
-              <div
-                key={c.customer_id}
-                className="list-row"
-                onClick={() => navigate(`/customer/${c.customer_id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
-              >
-                <span className="list-name">
-                  {c.name || 'Unknown'}
-                  <span className="list-id">{c.customer_id}</span>
-                </span>
-                <span className="list-phone">{c.phone ? `+91 ${c.phone}` : '-'}</span>
-                <span className="list-sources">
-                  {c.sources?.includes('instaxbot') && <span className="badge badge-insta">IG</span>}
-                  {c.sources?.includes('gowhats') && <span className="badge badge-whats">GW</span>}
-                  {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                  {c.sources?.includes('bill') && <span className="badge badge-bill">BZ</span>}
-                </span>
-                <span>{c.total_orders}</span>
-                <span className="list-spent">₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
-              </div>
-            ))}
           </div>
-          {customers.length < total && (
-            <div style={{ textAlign: 'center', padding: '2rem' }}>
-              <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? 'Loading...' : `Load More (${customers.length} of ${total})`}
-              </button>
-            </div>
-          )}
+          <VList
+            height={listHeight}
+            itemCount={filtered.length}
+            itemSize={ROW_HEIGHT_LIST}
+            width="100%"
+            overscanCount={10}
+            itemData={{ items: filtered, navigate }}
+          >
+            {ListRow}
+          </VList>
         </>
       )}
     </div>
