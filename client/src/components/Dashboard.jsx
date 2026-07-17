@@ -26,6 +26,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const customersLenRef = useRef(0)
+  const loadingMoreRef = useRef(false)
+  const autoLoadingRef = useRef(false)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -76,6 +78,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
       setLoadingMore(false)
+      loadingMoreRef.current = false
     }
   }, [toast, debouncedSearch, filters.sortBy])
 
@@ -83,13 +86,41 @@ export default function Dashboard() {
 
   useEffect(() => { loadData(true) }, [debouncedSearch, filters.sortBy])
 
+  useEffect(() => {
+    if (!loading && total > 0 && customersLenRef.current < total && !autoLoadingRef.current) {
+      autoLoadingRef.current = true
+      const loadAll = async () => {
+        let current = customersLenRef.current
+        while (current < total) {
+          try {
+            const sortMap = { recent: 'last_activity', name: 'name', spent: 'total_spent', orders: 'total_orders' }
+            const sortCol = sortMap[filters.sortBy] || 'last_activity'
+            const cRes = await fetchCustomers({ limit: PAGE_SIZE, offset: current, search: debouncedSearch, sort: sortCol, order: 'DESC' })
+            const list = cRes.customers || cRes.data || []
+            if (list.length === 0) break
+            setCustomers(prev => [...prev, ...list])
+            current += list.length
+          } catch (e) {
+            console.error('Auto-load failed', e)
+            break
+          }
+        }
+        autoLoadingRef.current = false
+      }
+      loadAll()
+    }
+  }, [loading, total, debouncedSearch, filters.sortBy])
+
   const loadMore = useCallback(() => {
-    if (loadingMore) return
+    if (loadingMoreRef.current) return
     const len = customersLenRef.current
+    if (len >= total) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
     const nextPage = Math.floor(len / PAGE_SIZE)
     setPage(nextPage)
-    loadData(false, nextPage)
-  }, [loadData, loadingMore])
+    loadData(false, nextPage).finally(() => { loadingMoreRef.current = false })
+  }, [loadData, total])
 
   useEffect(() => {
     const handleScroll = () => {
