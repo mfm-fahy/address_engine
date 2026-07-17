@@ -1,11 +1,13 @@
 keys.txt
 server/.env
+server/db/
 node_modules/
 __pycache__/
 *.pyc
 .DS_Store
 addressengine
 addressengine.pem
+addressengine1
 addressengine1.ppk
 *.ppk
 *.pem

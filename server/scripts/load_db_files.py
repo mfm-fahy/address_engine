@@ -197,11 +197,24 @@ async def load_old_json(pool):
                            metadata, stores, needs_analysis, address
                        ) VALUES ($1, $2, $3, $4, '', $5, 0, $6, $7::jsonb, '[]'::jsonb, $8::text[], $9::timestamptz, NOW(), '{}'::jsonb, '[]'::jsonb, TRUE, $10::jsonb)
                        ON CONFLICT (customer_id) DO UPDATE SET
-                           name = EXCLUDED.name,
-                           email = EXCLUDED.email,
-                           total_orders = EXCLUDED.total_orders,
-                           total_spent = EXCLUDED.total_spent,
-                           orders = EXCLUDED.orders,
+                           name = CASE
+                               WHEN EXCLUDED.name != '' AND length(EXCLUDED.name) > length(customers.name) THEN EXCLUDED.name
+                               ELSE customers.name
+                           END,
+                           email = CASE
+                               WHEN EXCLUDED.email != '' AND (customers.email IS NULL OR customers.email = '') THEN EXCLUDED.email
+                               ELSE customers.email
+                           END,
+                           total_orders = GREATEST(customers.total_orders, EXCLUDED.total_orders),
+                           total_spent = GREATEST(customers.total_spent, EXCLUDED.total_spent),
+                           orders = CASE
+                               WHEN customers.orders = '[]'::jsonb THEN EXCLUDED.orders
+                               ELSE customers.orders
+                           END,
+                           sources = (
+                               SELECT array_agg(DISTINCT s)
+                               FROM unnest(customers.sources || EXCLUDED.sources) AS s
+                           ),
                            last_activity = GREATEST(customers.last_activity, EXCLUDED.last_activity),
                            updated_at = NOW(),
                            address = CASE
