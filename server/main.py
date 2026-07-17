@@ -300,8 +300,8 @@ async def customer_summary(customer_id: str, refresh: bool = False):
     return {"customer_id": customer_id, "summary": summary}
 
 
-@app.get("/api/customer-form/{phone}")
-async def customer_form_data(phone: str, _: None = Depends(verify_api_key)):
+@app.get("/api/customer-form")
+async def customer_form_data(phone: str = Query(...), _: None = Depends(verify_api_key)):
     data = await _customer_service.get_form_data(phone)
     if not data:
         raise HTTPException(status_code=404, detail="Customer not found")
