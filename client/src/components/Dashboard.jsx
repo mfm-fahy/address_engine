@@ -6,7 +6,7 @@ import {
   Instagram, Globe, CreditCard,
   Package, LayoutGrid, List, Inbox
 } from 'lucide-react'
-import { List as VList } from 'react-window'
+import { FixedSizeList as VList } from 'react-window'
 import { fetchCustomers, fetchAlerts, triggerRefreshAll } from '../api'
 import { FilterPanel, SkeletonStats, SkeletonGrid, EmptyState, useToast } from './ui'
 
