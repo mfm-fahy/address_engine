@@ -16,11 +16,17 @@ const SOURCES = [
   { key: 'bill', label: 'Billzy', icon: CreditCard, color: '#3b82f6' },
 ]
 
+const PAGE_SIZE = 200
+
 export default function Dashboard() {
   const [customers, setCustomers] = useState([])
   const [alerts, setAlerts] = useState([])
-  const [search, setSearch] = useState('')
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState('grid')
   const navigate = useNavigate()
@@ -36,20 +42,48 @@ export default function Dashboard() {
 
   const [spendRange, setSpendRange] = useState({ minSpent: '', maxSpent: '' })
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const loadData = useCallback(async (reset = true, pageNum = 0) => {
     try {
-      const [cRes, aRes] = await Promise.all([fetchCustomers(), fetchAlerts()])
-      setCustomers(cRes.customers || [])
-      setAlerts(aRes.alerts || [])
+      if (reset) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
+      const offset = reset ? 0 : (pageNum + 1) * PAGE_SIZE
+      const sortMap = { recent: 'last_activity', name: 'name', spent: 'total_spent', orders: 'total_orders' }
+      const sortCol = sortMap[filters.sortBy] || 'last_activity'
+      const [cRes, aRes] = await Promise.all([
+        fetchCustomers({ limit: PAGE_SIZE, offset, search: debouncedSearch, sort: sortCol, order: 'DESC' }),
+        reset ? fetchAlerts() : Promise.resolve(null),
+      ])
+      if (reset) {
+        setCustomers(cRes.customers || [])
+        if (aRes) setAlerts(aRes.alerts || [])
+      } else {
+        setCustomers(prev => [...prev, ...(cRes.customers || [])])
+      }
+      setTotal(cRes.total || 0)
     } catch (e) {
       console.error('Failed to load data', e)
       toast('Failed to load dashboard data', 'error')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [toast])
+  }, [toast, debouncedSearch, filters.sortBy])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData(true) }, [debouncedSearch, filters.sortBy])
+
+  const loadMore = useCallback(() => {
+    const nextPage = Math.floor(customers.length / PAGE_SIZE)
+    setPage(nextPage)
+    loadData(false, nextPage)
+  }, [loadData, customers.length])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -75,7 +109,17 @@ export default function Dashboard() {
 
   const handleFilterChange = useCallback((key, value) => {
     setFilters(f => ({ ...f, [key]: value }))
-  }, [])
+    if (key === 'sortBy') {
+      setPage(0)
+      const sortMap = { recent: 'last_activity', name: 'name', spent: 'total_spent', orders: 'total_orders' }
+      const sortCol = sortMap[value] || 'last_activity'
+      setLoading(true)
+      fetchCustomers({ limit: PAGE_SIZE, offset: 0, search: debouncedSearch, sort: sortCol, order: 'DESC' })
+        .then(cRes => { setCustomers(cRes.customers || []); setTotal(cRes.total || 0) })
+        .catch(() => toast('Failed to reload', 'error'))
+        .finally(() => setLoading(false))
+    }
+  }, [debouncedSearch, toast])
 
   const handleRangeChange = useCallback((key, value) => {
     setSpendRange(r => ({ ...r, [key]: value }))
@@ -100,16 +144,6 @@ export default function Dashboard() {
   const filtered = useMemo(() => {
     let result = [...customers]
 
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter(c =>
-        c.name?.toLowerCase().includes(q) ||
-        c.phone?.includes(q) ||
-        c.customer_id?.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q)
-      )
-    }
-
     if (filters.sources.length > 0) {
       result = result.filter(c =>
         filters.sources.some(s => c.sources?.includes(s))
@@ -126,23 +160,8 @@ export default function Dashboard() {
     if (spendRange.minSpent) result = result.filter(c => (c.total_spent || 0) >= Number(spendRange.minSpent))
     if (spendRange.maxSpent) result = result.filter(c => (c.total_spent || 0) <= Number(spendRange.maxSpent))
 
-    switch (filters.sortBy) {
-      case 'name':
-        result.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        break
-      case 'spent':
-        result.sort((a, b) => (b.total_spent || 0) - (a.total_spent || 0))
-        break
-      case 'orders':
-        result.sort((a, b) => (b.total_orders || 0) - (a.total_orders || 0))
-        break
-      default:
-        result.sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0))
-        break
-    }
-
     return result
-  }, [customers, search, filters, spendRange, alerts])
+  }, [customers, filters, spendRange, alerts])
 
   const stats = useMemo(() => ({
     total: customers.length,
@@ -311,71 +330,89 @@ export default function Dashboard() {
           )}
         />
       ) : viewMode === 'grid' ? (
-        <div className="customers-grid">
-          {filtered.map(c => (
-            <div
-              key={c.customer_id}
-              className="customer-card"
-              onClick={() => navigate(`/customer/${c.customer_id}`)}
-              role="button"
-              tabIndex={0}
-              aria-label={`View customer ${c.name || 'Unknown'}`}
-              onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
-            >
-              <div className="card-top">
-                <div className="name">{c.name || 'Unknown'}</div>
-                {c.total_spent >= 50000 && <span className="badge badge-vip">VIP</span>}
+        <>
+          <div className="customers-grid">
+            {filtered.map(c => (
+              <div
+                key={c.customer_id}
+                className="customer-card"
+                onClick={() => navigate(`/customer/${c.customer_id}`)}
+                role="button"
+                tabIndex={0}
+                aria-label={`View customer ${c.name || 'Unknown'}`}
+                onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
+              >
+                <div className="card-top">
+                  <div className="name">{c.name || 'Unknown'}</div>
+                  {c.total_spent >= 50000 && <span className="badge badge-vip">VIP</span>}
+                </div>
+                <div className="phone">{c.phone ? `+91 ${c.phone}` : 'No phone'}</div>
+                <div className="badges">
+                  {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
+                  {c.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
+                  {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
+                  {c.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
+                  {c.username && <span className="badge badge-default">@{c.username}</span>}
+                </div>
+                <div className="stats-row">
+                  <span><ShoppingCart size={12} /> {c.total_orders} orders</span>
+                  <span><TrendingUp size={12} /> ₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
+                  <span><MessageCircle size={12} /> {c.comment_count || 0}</span>
+                </div>
               </div>
-              <div className="phone">{c.phone ? `+91 ${c.phone}` : 'No phone'}</div>
-              <div className="badges">
-                {c.sources?.includes('instaxbot') && <span className="badge badge-insta">Instaxbot</span>}
-                {c.sources?.includes('gowhats') && <span className="badge badge-whats">GoWhats</span>}
-                {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                {c.sources?.includes('bill') && <span className="badge badge-bill">Billzy</span>}
-                {c.username && <span className="badge badge-default">@{c.username}</span>}
-              </div>
-              <div className="stats-row">
-                <span><ShoppingCart size={12} /> {c.total_orders} orders</span>
-                <span><TrendingUp size={12} /> ₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
-                <span><MessageCircle size={12} /> {c.comment_count || 0}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="customers-list">
-          <div className="list-header">
-            <span>Customer</span>
-            <span>Phone</span>
-            <span>Sources</span>
-            <span>Orders</span>
-            <span>Spent</span>
+            ))}
           </div>
-          {filtered.map(c => (
-            <div
-              key={c.customer_id}
-              className="list-row"
-              onClick={() => navigate(`/customer/${c.customer_id}`)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
-            >
-              <span className="list-name">
-                {c.name || 'Unknown'}
-                <span className="list-id">{c.customer_id}</span>
-              </span>
-              <span className="list-phone">{c.phone ? `+91 ${c.phone}` : '-'}</span>
-              <span className="list-sources">
-                {c.sources?.includes('instaxbot') && <span className="badge badge-insta">IG</span>}
-                {c.sources?.includes('gowhats') && <span className="badge badge-whats">GW</span>}
-                {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
-                {c.sources?.includes('bill') && <span className="badge badge-bill">BZ</span>}
-              </span>
-              <span>{c.total_orders}</span>
-              <span className="list-spent">₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
+          {customers.length < total && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading...' : `Load More (${customers.length} of ${total})`}
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="customers-list">
+            <div className="list-header">
+              <span>Customer</span>
+              <span>Phone</span>
+              <span>Sources</span>
+              <span>Orders</span>
+              <span>Spent</span>
+            </div>
+            {filtered.map(c => (
+              <div
+                key={c.customer_id}
+                className="list-row"
+                onClick={() => navigate(`/customer/${c.customer_id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && navigate(`/customer/${c.customer_id}`)}
+              >
+                <span className="list-name">
+                  {c.name || 'Unknown'}
+                  <span className="list-id">{c.customer_id}</span>
+                </span>
+                <span className="list-phone">{c.phone ? `+91 ${c.phone}` : '-'}</span>
+                <span className="list-sources">
+                  {c.sources?.includes('instaxbot') && <span className="badge badge-insta">IG</span>}
+                  {c.sources?.includes('gowhats') && <span className="badge badge-whats">GW</span>}
+                  {c.sources?.includes('f3') && <span className="badge badge-f3">F3</span>}
+                  {c.sources?.includes('bill') && <span className="badge badge-bill">BZ</span>}
+                </span>
+                <span>{c.total_orders}</span>
+                <span className="list-spent">₹{isFinite(c.total_spent) ? c.total_spent.toLocaleString() : 0}</span>
+              </div>
+            ))}
+          </div>
+          {customers.length < total && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading...' : `Load More (${customers.length} of ${total})`}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

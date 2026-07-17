@@ -9,7 +9,16 @@ async function request(url, options = {}) {
   return res.json()
 }
 
-export const fetchCustomers = () => request('/customers')
+export const fetchCustomers = (params = {}) => {
+  const qs = new URLSearchParams()
+  if (params.limit) qs.set('limit', params.limit)
+  if (params.offset) qs.set('offset', params.offset)
+  if (params.search) qs.set('search', params.search)
+  if (params.sort) qs.set('sort', params.sort)
+  if (params.order) qs.set('order', params.order)
+  const q = qs.toString()
+  return request(`/customers${q ? '?' + q : ''}`)
+}
 export const fetchCustomer = (id) => request(`/customers/${id}?include_comments=true`)
 export const fetchAlerts = () => request('/alerts?limit=10000')
 export const triggerFetchData = () => request('/fetch-data', { method: 'POST' })
