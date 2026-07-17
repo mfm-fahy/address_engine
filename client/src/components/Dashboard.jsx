@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart, MessageCircle, AlertTriangle, TrendingUp,
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const customersLenRef = useRef(0)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -78,24 +79,28 @@ export default function Dashboard() {
     }
   }, [toast, debouncedSearch, filters.sortBy])
 
+  useEffect(() => { customersLenRef.current = customers.length }, [customers.length])
+
   useEffect(() => { loadData(true) }, [debouncedSearch, filters.sortBy])
 
   const loadMore = useCallback(() => {
-    const nextPage = Math.floor(customers.length / PAGE_SIZE)
+    if (loadingMore) return
+    const len = customersLenRef.current
+    const nextPage = Math.floor(len / PAGE_SIZE)
     setPage(nextPage)
     loadData(false, nextPage)
-  }, [loadData, customers.length])
+  }, [loadData, loadingMore])
 
   useEffect(() => {
     const handleScroll = () => {
-      if (loadingMore || customers.length >= total) return
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
+      if (customersLenRef.current >= total) return
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
         loadMore()
       }
     }
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [loadMore, loadingMore, customers.length, total])
+  }, [loadMore, total])
 
   const handleRefresh = async () => {
     setRefreshing(true)
