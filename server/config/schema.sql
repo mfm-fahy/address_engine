@@ -69,9 +69,11 @@ CREATE TABLE IF NOT EXISTS comments (
     sentiment_label TEXT DEFAULT 'neutral',
     is_negative BOOLEAN DEFAULT FALSE,
     triggered_rule TEXT DEFAULT '',
+    comment_id TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_comments_customer ON comments(customer_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comments_comment_id ON comments(comment_id) WHERE comment_id != '';
 
 CREATE TABLE IF NOT EXISTS alerts (
     id SERIAL PRIMARY KEY,
