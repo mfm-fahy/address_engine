@@ -61,11 +61,12 @@ export default function Dashboard() {
         fetchCustomers({ limit: PAGE_SIZE, offset, search: debouncedSearch, sort: sortCol, order: 'DESC' }),
         reset ? fetchAlerts() : Promise.resolve(null),
       ])
+      const customerList = cRes.customers || cRes.data || []
       if (reset) {
-        setCustomers(cRes.customers || [])
-        if (aRes) setAlerts(aRes.alerts || [])
+        setCustomers(customerList)
+        if (aRes) setAlerts(aRes.alerts || aRes.data || [])
       } else {
-        setCustomers(prev => [...prev, ...(cRes.customers || [])])
+        setCustomers(prev => [...prev, ...customerList])
       }
       setTotal(cRes.total || 0)
     } catch (e) {
@@ -115,7 +116,7 @@ export default function Dashboard() {
       const sortCol = sortMap[value] || 'last_activity'
       setLoading(true)
       fetchCustomers({ limit: PAGE_SIZE, offset: 0, search: debouncedSearch, sort: sortCol, order: 'DESC' })
-        .then(cRes => { setCustomers(cRes.customers || []); setTotal(cRes.total || 0) })
+        .then(cRes => { setCustomers(cRes.customers || cRes.data || []); setTotal(cRes.total || 0) })
         .catch(() => toast('Failed to reload', 'error'))
         .finally(() => setLoading(false))
     }
