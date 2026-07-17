@@ -301,11 +301,26 @@ async def customer_summary(customer_id: str, refresh: bool = False):
 
 
 @app.get("/api/customer-form")
-async def customer_form_data(phone: str = Query(...), _: None = Depends(verify_api_key)):
-    data = await _customer_service.get_form_data(phone)
-    if not data:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    return ok(data)
+async def customer_form_data(phone: str = Query(None), _: None = Depends(verify_api_key)):
+    if phone:
+        data = await _customer_service.get_form_data(phone)
+        if not data:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        return ok(data)
+    customers = await _customer_service.get_all()
+    form_data = [
+        {
+            "customer_id": c.get("customer_id"),
+            "phone": c.get("phone"),
+            "name": c.get("name", ""),
+            "email": c.get("email", ""),
+            "username": c.get("username", ""),
+            "address": c.get("address", {}),
+            "stores": c.get("stores", []),
+        }
+        for c in customers
+    ]
+    return ok(form_data)
 
 
 @app.get("/api/customers/{customer_id}/section-summaries")
