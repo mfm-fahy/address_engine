@@ -16,7 +16,7 @@ const SOURCES = [
   { key: 'bill', label: 'Billzy', icon: CreditCard, color: '#3b82f6' },
 ]
 
-const PAGE_SIZE = 200
+const PAGE_SIZE = 1000
 
 export default function Dashboard() {
   const [customers, setCustomers] = useState([])
@@ -85,6 +85,17 @@ export default function Dashboard() {
     setPage(nextPage)
     loadData(false, nextPage)
   }, [loadData, customers.length])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (loadingMore || customers.length >= total) return
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
+        loadMore()
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [loadMore, loadingMore, customers.length, total])
 
   const handleRefresh = async () => {
     setRefreshing(true)
