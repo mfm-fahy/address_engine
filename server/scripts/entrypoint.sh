@@ -64,8 +64,11 @@ if [ "$CUSTOMER_COUNT" -lt 100 ]; then
   echo "  [4/5] load_remaining.py"
   python scripts/load_remaining.py 2>&1 || echo "  WARNING: load_remaining.py had errors"
 
-  echo "  [5/5] load_jsonsql.py"
+  echo "  [5/6] load_jsonsql.py"
   python scripts/load_jsonsql.py 2>&1 || echo "  WARNING: load_jsonsql.py had errors"
+
+  echo "  [6/6] load_csv_f3.py"
+  python scripts/load_csv_f3.py 2>&1 || echo "  WARNING: load_csv_f3.py had errors"
 
   echo "All loader scripts completed."
 else
